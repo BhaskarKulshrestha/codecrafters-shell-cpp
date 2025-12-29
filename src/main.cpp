@@ -166,9 +166,9 @@ int main() {
         }
         else if (command == "pwd") {
             // Print current working directory
-            char cwd[1024];
-            if (getcwd(cwd, sizeof(cwd)) != nullptr) {
-                cout << cwd << endl;
+            vector<char>cwd(1024);
+            if (getcwd(cwd.data(), cwd.size()) != nullptr) {
+                cout << cwd.data() << endl;
             } else {
                 cerr << "Error: Unable to get current directory" << endl;
             }
