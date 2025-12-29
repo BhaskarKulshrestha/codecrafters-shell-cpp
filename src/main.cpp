@@ -11,7 +11,7 @@ using namespace std;
 // Check if a command is a builtin command
 bool is_builtin(const string& command) {
     // Set of all builtin commands
-    unordered_set<string> builtins = {"echo", "exit", "type"};
+    unordered_set<string> builtins = {"echo", "exit", "type", "pwd"};
     
     // Check if command exists in the set
     return builtins.count(command) > 0;
@@ -163,6 +163,15 @@ int main() {
                 }
             }
             cout << endl;
+        }
+        else if (command == "pwd") {
+            // Print current working directory
+            char cwd[1024];
+            if (getcwd(cwd, sizeof(cwd)) != nullptr) {
+                cout << cwd << endl;
+            } else {
+                cerr << "Error: Unable to get current directory" << endl;
+            }
         }
         else {
             // Not a builtin, try to execute as external program
