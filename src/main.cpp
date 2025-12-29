@@ -10,7 +10,7 @@ int main() {
   string command;
   cin>>command;
 
-  cout<<"Command not found: "<<command<<endl; 
+  cout<<command<<": command not found"<<endl; 
 
   // TODO: Uncomment the code below to pass the first stage
   // cout << "$ ";
