@@ -18,7 +18,7 @@ int main() {
     if(line == "exit"){
       break;
     }
-    if(line == "echo"){
+    else if(line.substr(0, 4) == "echo"){
       stringstream ss(line);
       string seprated_words_with_spaces;
       while(ss >> seprated_words_with_spaces){
@@ -29,6 +29,9 @@ int main() {
       cout << endl;
       continue;
     }
-    cout <<line<<": command not found"<< endl;
+    else{
+      cout <<line<<": command not found"<< endl;
+    }
+
   }
 }
