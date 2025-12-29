@@ -6,11 +6,9 @@ using namespace std;
 
 void check_command_validity(string command){
   unordered_set<string> commands = {"echo", "exit", "type"};
-  cout <<command<<": command not found"<< endl;
 
   if(commands.find(command) == commands.end()){
     cout <<command<<": command not found"<< endl;
-    exit(0);
   }
   else{
     cout<<command<<" is a shell builtin"<< endl;
