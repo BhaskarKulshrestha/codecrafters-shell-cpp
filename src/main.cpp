@@ -14,10 +14,10 @@ bool is_builtin(const string& command) {
 
 /* ---------- PATH search ---------- */
 bool find_executable_in_path(const string& command, string& full_path) {
-    char* path_env = getenv("PATH");
-    if (!path_env) return false;
+    string path_env = getenv("PATH");
+    if (path_env.empty()) return false;
 
-    string path(path_env);
+    string path = path_env;
     stringstream ss(path);
     string dir;
 
