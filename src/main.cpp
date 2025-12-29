@@ -52,6 +52,9 @@ int main() {
       cout << endl;
       continue;
     }
-    check_command_validity(line);
+    else{
+      check_command_validity(line);
+    }
+    
   }
 }
