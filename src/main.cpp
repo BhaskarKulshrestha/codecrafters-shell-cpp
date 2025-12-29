@@ -35,7 +35,7 @@ int main() {
 
     else if(line.substr(0, 4) == "type"){
       string command = line.substr(5);
-      stringstream ss(line);
+      stringstream ss(command);
       string seprated_words_with_spaces;
 
       while(ss >> seprated_words_with_spaces){
