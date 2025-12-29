@@ -14,6 +14,9 @@ int main() {
     if (!getline(cin, line)) {
       break;
     }
+    if(line == "exit"){
+      break;
+    }
     cout <<line<<": command not found"<< endl;
   }
 }
