@@ -35,8 +35,12 @@ int main() {
 
     else if(line.substr(0, 4) == "type"){
       string command = line.substr(5);
-      check_command_validity(command);
-      continue;
+      stringstream ss(line);
+      string seprated_words_with_spaces;
+
+      while(ss >> seprated_words_with_spaces){
+          check_command_validity(seprated_words_with_spaces);
+      }
     }
     
     else if(line.substr(0, 4) == "echo"){
