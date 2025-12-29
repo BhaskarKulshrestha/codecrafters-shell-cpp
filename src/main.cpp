@@ -49,8 +49,9 @@ int main() {
           cout << seprated_words_with_spaces << " ";
         }
       }
-      cout << endl;
-      continue;
+    }
+    else{
+      check_command_validity(line);
     }
   }
 }
