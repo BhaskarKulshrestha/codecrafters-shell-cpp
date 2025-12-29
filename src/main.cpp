@@ -8,7 +8,7 @@ void check_command_validity(string command){
   unordered_set<string> commands = {"echo", "exit", "type"};
 
   if(commands.find(command) == commands.end()){
-    cout <<command<<": command not found"<< endl;
+    cout <<command<<": not found"<< endl;
   }
   else{
     cout<<command<<" is a shell builtin"<< endl;
