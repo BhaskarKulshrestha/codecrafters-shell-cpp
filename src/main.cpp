@@ -7,11 +7,12 @@ int main() {
   cout << unitbuf;
   cerr << unitbuf;
 
+  // TODO: Uncomment the code below to pass the first stage
+  cout << "$ ";
+
+
   string command;
   cin>>command;
 
   cout<<command<<": command not found"<<endl; 
-
-  // TODO: Uncomment the code below to pass the first stage
-  // cout << "$ ";
 }
