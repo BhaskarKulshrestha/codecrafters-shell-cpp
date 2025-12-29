@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <sstream>
 using namespace std;
 
 int main() {
@@ -16,6 +17,17 @@ int main() {
     }
     if(line == "exit"){
       break;
+    }
+    if(line == "echo"){
+      stringstream ss(line);
+      string seprated_words_with_spaces;
+      while(ss >> seprated_words_with_spaces){
+        if(seprated_words_with_spaces != "echo"){
+          cout << seprated_words_with_spaces << " ";
+        }
+      }
+      cout << endl;
+      continue;
     }
     cout <<line<<": command not found"<< endl;
   }
