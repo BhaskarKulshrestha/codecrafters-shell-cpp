@@ -13,5 +13,5 @@ int main() {
   cout<<"Command not found: "<<command<<endl; 
 
   // TODO: Uncomment the code below to pass the first stage
-  cout << "$ ";
+  // cout << "$ ";
 }
