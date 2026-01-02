@@ -6,6 +6,7 @@
 #include <cstdlib>      // for getenv
 #include <unistd.h>     // for access, fork, execvp
 #include <sys/wait.h>   // for waitpid
+#include <fcntl.h>      // for open, O_WRONLY, O_CREAT, O_TRUNC
 using namespace std;
 
 // Check if a command is a builtin command
@@ -136,8 +137,8 @@ vector<string> parse_command_line(const string& line) {
     return tokens;
 }
 
-// Execute an external program with arguments
-void execute_program(const vector<string>& args) {
+// Execute an external program with arguments and optional output redirection
+void execute_program(const vector<string>& args, const string& output_file = "") {
     if (args.empty()) return;
     
     string command = args[0];
@@ -170,6 +171,25 @@ void execute_program(const vector<string>& args) {
     
     if (process_id == 0) {
         // This code runs in the CHILD process
+        
+        // If output redirection is specified, redirect stdout to file
+        if (!output_file.empty()) {
+            // Open file for writing (create if not exists, truncate if exists)
+            // 0644 means read/write for owner, read for others
+            int file_fd = open(output_file.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            
+            if (file_fd < 0) {
+                cerr << "Error: Cannot open file " << output_file << endl;
+                exit(1);
+            }
+            
+            // Redirect stdout (file descriptor 1) to the file
+            dup2(file_fd, 1);
+            
+            // Close the file descriptor (we already have it as stdout now)
+            close(file_fd);
+        }
+        
         // Replace child process with the new program
         execvp(argv_pointers[0], argv_pointers.data());
         
@@ -207,8 +227,30 @@ int main() {
         // Skip empty lines
         if (tokens.empty()) continue;
         
+        // Check for output redirection (> or 1>)
+        string output_file = "";
+        vector<string> command_tokens;
+        
+        for (int i = 0; i < tokens.size(); i++) {
+            // Check if token is > or 1>
+            if (tokens[i] == ">" || tokens[i] == "1>") {
+                // Next token should be the filename
+                if (i + 1 < tokens.size()) {
+                    output_file = tokens[i + 1];
+                    i++;  // Skip the filename in next iteration
+                }
+                // Don't add > or filename to command_tokens
+            } else {
+                // Regular token, add to command
+                command_tokens.push_back(tokens[i]);
+            }
+        }
+        
+        // Skip empty commands
+        if (command_tokens.empty()) continue;
+        
         // First word is the command
-        string command = tokens[0];
+        string command = command_tokens[0];
         
         // Handle different commands
         if (command == "exit") {
@@ -217,19 +259,40 @@ int main() {
         }
         else if (command == "type") {
             // Check each argument after 'type'
-            for (int i = 1; i < tokens.size(); i++) {
-                check_command_validity(tokens[i]);
+            for (int i = 1; i < command_tokens.size(); i++) {
+                check_command_validity(command_tokens[i]);
             }
         }
         else if (command == "echo") {
-            // Print all words after 'echo'
-            for (int i = 1; i < tokens.size(); i++) {
-                cout << tokens[i];
-                if (i < tokens.size() - 1) {
-                    cout << " ";  // Add space between words
+            // Handle output redirection for echo
+            if (!output_file.empty()) {
+                // Redirect to file
+                int file_fd = open(output_file.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                if (file_fd >= 0) {
+                    // Print all words after 'echo' to the file
+                    string output = "";
+                    for (int i = 1; i < command_tokens.size(); i++) {
+                        output += command_tokens[i];
+                        if (i < command_tokens.size() - 1) {
+                            output += " ";
+                        }
+                    }
+                    output += "\n";
+                    write(file_fd, output.c_str(), output.length());
+                    close(file_fd);
+                } else {
+                    cerr << "Error: Cannot open file " << output_file << endl;
                 }
+            } else {
+                // Print all words after 'echo' to stdout
+                for (int i = 1; i < command_tokens.size(); i++) {
+                    cout << command_tokens[i];
+                    if (i < command_tokens.size() - 1) {
+                        cout << " ";  // Add space between words
+                    }
+                }
+                cout << endl;
             }
-            cout << endl;
         }
         else if (command == "pwd") {
             // Print current working directory
@@ -242,10 +305,10 @@ int main() {
         }
         else if (command == "cd") {
             // Change directory
-            if (tokens.size() < 2) {
+            if (command_tokens.size() < 2) {
                 cerr << "cd: missing argument" << endl;
             } else {
-                string path = tokens[1];
+                string path = command_tokens[1];
                 
                 // Handle ~ (home directory)
                 if (path == "~" || path.substr(0, 2) == "~/") {
@@ -266,14 +329,14 @@ int main() {
                 // Try to change directory (works for absolute and relative paths)
                 if (chdir(path.c_str()) != 0) {
                     // Failed to change directory
-                    cout << "cd: " << tokens[1] << ": No such file or directory" << endl;
+                    cout << "cd: " << command_tokens[1] << ": No such file or directory" << endl;
                 }
                 // If successful, directory is changed (no output needed)
             }
         }
         else {
             // Not a builtin, try to execute as external program
-            execute_program(tokens);
+            execute_program(command_tokens, output_file);
         }
     }
     
