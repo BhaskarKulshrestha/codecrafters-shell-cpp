@@ -9,9 +9,54 @@
 #include <fcntl.h>      // for open, O_WRONLY, O_CREAT, O_TRUNC
 #include <dirent.h>     // for opendir, readdir, closedir
 #include <cstring>      // for strlen, strdup
+#include <fstream>      // for file operations
 #include <readline/readline.h>  // for readline, tab completion
 #include <readline/history.h>   // for history functions
 using namespace std;
+
+// Custom function to load history from a plain text file
+// Reads line by line and adds to history using add_history()
+int custom_read_history(const char* filename) {
+    ifstream file(filename);
+    if (!file.is_open()) {
+        return -1;  // Error opening file
+    }
+    
+    string line;
+    while (getline(file, line)) {
+        // Skip empty lines
+        if (!line.empty()) {
+            add_history(line.c_str());
+        }
+    }
+    
+    file.close();
+    return 0;  // Success
+}
+
+// Custom function to append new history entries to a file
+// Similar to append_history from GNU readline, but implemented manually
+int custom_append_history(int num_entries, const char* filename) {
+    // Open file in append mode
+    ofstream file(filename, ios::app);
+    if (!file.is_open()) {
+        return -1;  // Error opening file
+    }
+    
+    // Calculate starting position (last num_entries)
+    int start_index = max(0, history_length - num_entries);
+    
+    // Write the last num_entries to the file
+    for (int i = start_index; i < history_length; i++) {
+        HIST_ENTRY* entry = history_get(i + history_base);
+        if (entry) {
+            file << entry->line << endl;
+        }
+    }
+    
+    file.close();
+    return 0;  // Success
+}
 
 // Check if a command is a builtin command
 bool is_builtin(const string& command) {
@@ -242,7 +287,7 @@ bool execute_builtin_in_pipeline(const vector<string>& args, int& last_appended_
             int new_entries = history_length - last_appended_position;
             if (new_entries > 0) {
                 // Append only the new entries
-                if (append_history(new_entries, filename.c_str()) == 0) {
+                if (custom_append_history(new_entries, filename.c_str()) == 0) {
                     // Successfully appended history
                     last_appended_position = history_length;
                 } else {
@@ -713,6 +758,13 @@ int main() {
     // Set up readline completion
     rl_attempted_completion_function = command_completion;
     
+    // Load history from HISTFILE if the environment variable is set
+    const char* histfile = getenv("HISTFILE");
+    if (histfile != nullptr) {
+        // Load history from the file (ignore errors if file doesn't exist)
+        custom_read_history(histfile);
+    }
+    
     // Track the history position for append operations
     int last_appended_position = 0;
     
@@ -967,7 +1019,7 @@ int main() {
                 int new_entries = history_length - last_appended_position;
                 if (new_entries > 0) {
                     // Append only the new entries
-                    if (append_history(new_entries, filename.c_str()) == 0) {
+                    if (custom_append_history(new_entries, filename.c_str()) == 0) {
                         // Successfully appended history
                         last_appended_position = history_length;
                     } else {
