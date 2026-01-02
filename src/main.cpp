@@ -222,6 +222,18 @@ bool execute_builtin_in_pipeline(const vector<string>& args) {
             return true;
         }
         
+        // Handle history -w <file> (write history to file)
+        if (args.size() >= 3 && args[1] == "-w") {
+            string filename = args[2];
+            // Write history to file
+            if (write_history(filename.c_str()) == 0) {
+                // Successfully wrote history
+            } else {
+                cerr << "history: " << filename << ": cannot write" << endl;
+            }
+            return true;
+        }
+        
         // Display command history using readline's history
         int num_to_show = history_length;  // Default: show all
         
@@ -904,6 +916,18 @@ int main() {
                     // Successfully read history
                 } else {
                     cerr << "history: " << filename << ": cannot read" << endl;
+                }
+                continue;
+            }
+            
+            // Handle history -w <file> (write history to file)
+            if (command_tokens.size() >= 3 && command_tokens[1] == "-w") {
+                string filename = command_tokens[2];
+                // Write history to file
+                if (write_history(filename.c_str()) == 0) {
+                    // Successfully wrote history
+                } else {
+                    cerr << "history: " << filename << ": cannot write" << endl;
                 }
                 continue;
             }
