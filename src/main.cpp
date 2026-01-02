@@ -141,6 +141,110 @@ vector<string> parse_command_line(const string& line) {
     return tokens;
 }
 
+// Execute a pipeline of two commands
+void execute_pipeline(const vector<string>& cmd1_args, const vector<string>& cmd2_args) {
+    if (cmd1_args.empty() || cmd2_args.empty()) return;
+    
+    // Check if both commands exist in PATH
+    string cmd1_path, cmd2_path;
+    if (!find_executable_in_path(cmd1_args[0], cmd1_path)) {
+        cout << cmd1_args[0] << ": command not found" << endl;
+        return;
+    }
+    if (!find_executable_in_path(cmd2_args[0], cmd2_path)) {
+        cout << cmd2_args[0] << ": command not found" << endl;
+        return;
+    }
+    
+    // Create a pipe
+    // pipe_fds[0] is the read end, pipe_fds[1] is the write end
+    int pipe_fds[2];
+    if (pipe(pipe_fds) < 0) {
+        cerr << "Error: Failed to create pipe" << endl;
+        return;
+    }
+    
+    // Fork first command
+    pid_t pid1 = fork();
+    
+    if (pid1 < 0) {
+        cerr << "Error: Failed to fork first process" << endl;
+        close(pipe_fds[0]);
+        close(pipe_fds[1]);
+        return;
+    }
+    
+    if (pid1 == 0) {
+        // First child process - executes first command
+        
+        // Redirect stdout to the write end of the pipe
+        dup2(pipe_fds[1], 1);
+        
+        // Close both pipe file descriptors (we have them as stdout now)
+        close(pipe_fds[0]);
+        close(pipe_fds[1]);
+        
+        // Prepare arguments for execvp
+        vector<char*> argv;
+        for (int i = 0; i < cmd1_args.size(); i++) {
+            argv.push_back((char*)cmd1_args[i].c_str());
+        }
+        argv.push_back(nullptr);
+        
+        // Execute first command
+        execvp(argv[0], argv.data());
+        
+        // If execvp returns, it failed
+        cerr << cmd1_args[0] << ": command not found" << endl;
+        exit(1);
+    }
+    
+    // Fork second command
+    pid_t pid2 = fork();
+    
+    if (pid2 < 0) {
+        cerr << "Error: Failed to fork second process" << endl;
+        close(pipe_fds[0]);
+        close(pipe_fds[1]);
+        waitpid(pid1, nullptr, 0);
+        return;
+    }
+    
+    if (pid2 == 0) {
+        // Second child process - executes second command
+        
+        // Redirect stdin to the read end of the pipe
+        dup2(pipe_fds[0], 0);
+        
+        // Close both pipe file descriptors (we have them as stdin now)
+        close(pipe_fds[0]);
+        close(pipe_fds[1]);
+        
+        // Prepare arguments for execvp
+        vector<char*> argv;
+        for (int i = 0; i < cmd2_args.size(); i++) {
+            argv.push_back((char*)cmd2_args[i].c_str());
+        }
+        argv.push_back(nullptr);
+        
+        // Execute second command
+        execvp(argv[0], argv.data());
+        
+        // If execvp returns, it failed
+        cerr << cmd2_args[0] << ": command not found" << endl;
+        exit(1);
+    }
+    
+    // Parent process
+    // Close both ends of the pipe (children have their own copies)
+    close(pipe_fds[0]);
+    close(pipe_fds[1]);
+    
+    // Wait for both children to complete
+    waitpid(pid1, nullptr, 0);
+    waitpid(pid2, nullptr, 0);
+}
+
 // Execute an external program with arguments and optional output redirection
 void execute_program(const vector<string>& args, const string& stdout_file = "", bool stdout_append = false, const string& stderr_file = "", bool stderr_append = false) {
     if (args.empty()) return;
@@ -354,6 +458,35 @@ int main() {
         
         // Skip empty lines
         if (tokens.empty()) continue;
+        
+        // Check for pipeline (|)
+        int pipe_index = -1;
+        for (int i = 0; i < tokens.size(); i++) {
+            if (tokens[i] == "|") {
+                pipe_index = i;
+                break;
+            }
+        }
+        
+        // If pipeline exists, handle it separately
+        if (pipe_index != -1) {
+            // Split tokens into two commands
+            vector<string> cmd1_tokens;
+            vector<string> cmd2_tokens;
+            
+            for (int i = 0; i < pipe_index; i++) {
+                cmd1_tokens.push_back(tokens[i]);
+            }
+            for (int i = pipe_index + 1; i < tokens.size(); i++) {
+                cmd2_tokens.push_back(tokens[i]);
+            }
+            
+            // Execute pipeline
+            if (!cmd1_tokens.empty() && !cmd2_tokens.empty()) {
+                execute_pipeline(cmd1_tokens, cmd2_tokens);
+            }
+            continue;
+        }
         
         // Check for output redirection (>, 1>, >>, 1>>) and error redirection (2>, 2>>)
         string stdout_file = "";
