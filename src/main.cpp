@@ -69,8 +69,10 @@ vector<string> parse_command_line(const string& line) {
     vector<string> tokens;
     string current_token = "";
     bool inside_quotes = false;
+    bool run_for_sinlge_quote=false;
     
     for (int i = 0; i < line.length(); i++) {
+        run_for_sinlge_quote=true;
         char ch = line[i];
         
         if (ch == '\'' && !inside_quotes) {
@@ -82,6 +84,7 @@ vector<string> parse_command_line(const string& line) {
             inside_quotes = false;
         }
         else if (ch == ' ' && !inside_quotes) {
+            // this is for the case when more thean two commands are written together, like echo 'hello  world something', so in this all three are process in one go in this else block.
             // Space outside quotes - it's a separator
             if (!current_token.empty()) {
                 tokens.push_back(current_token);
@@ -92,6 +95,36 @@ vector<string> parse_command_line(const string& line) {
             // Regular character or space inside quotes
             current_token += ch;
         }
+    }
+
+    //case for double quotes handling
+    if(!run_for_sinlge_quote){
+
+        for (int i = 0; i < line.length(); i++) {
+        char ch = line[i];
+        
+        if (ch == '\"' && !inside_quotes) {
+            // Start of quoted string
+            inside_quotes = true;
+        }
+        else if (ch == '\"' && inside_quotes) {
+            // End of quoted string
+            inside_quotes = false;
+        }
+        else if (ch == ' ' && !inside_quotes) {
+            // this is for the case when more thean two commands are written together, like echo 'hello  world something', so in this all three are process in one go in this else block.
+            // Space outside quotes - it's a separator
+            if (!current_token.empty()) {
+                tokens.push_back(current_token);
+                current_token = "";
+            }
+        }
+        else {
+            // Regular character or space inside quotes
+            current_token += ch;
+        }
+    }
+
     }
     
     // Add the last token if any
