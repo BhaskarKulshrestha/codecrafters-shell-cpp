@@ -63,68 +63,41 @@ void check_command_validity(const string& command) {
     }
 }
 
-// Parse command line with single quote support
+// Parse command line with single and double quote support
 // Returns vector of tokens, handling quotes and preserving spaces within quotes
 vector<string> parse_command_line(const string& line) {
     vector<string> tokens;
     string current_token = "";
-    bool inside_quotes = false;
-    bool run_for_sinlge_quote=false;
+    bool inside_single_quotes = false;
+    bool inside_double_quotes = false;
     
+    // Loop through each character in the line
     for (int i = 0; i < line.length(); i++) {
-        run_for_sinlge_quote=true;
         char ch = line[i];
         
-        if (ch == '\'' && !inside_quotes) {
-            // Start of quoted string
-            inside_quotes = true;
+        // Check for single quote
+        if (ch == '\'' && !inside_double_quotes) {
+            // Toggle single quote mode (turn on/off)
+            inside_single_quotes = !inside_single_quotes;
         }
-        else if (ch == '\'' && inside_quotes) {
-            // End of quoted string
-            inside_quotes = false;
+        // Check for double quote
+        else if (ch == '\"' && !inside_single_quotes) {
+            // Toggle double quote mode (turn on/off)
+            inside_double_quotes = !inside_double_quotes;
         }
-        else if (ch == ' ' && !inside_quotes) {
-            // this is for the case when more thean two commands are written together, like echo 'hello  world something', so in this all three are process in one go in this else block.
-            // Space outside quotes - it's a separator
+        // Check for space outside quotes
+        else if (ch == ' ' && !inside_single_quotes && !inside_double_quotes) {
+            // Space is a separator when not inside any quotes
             if (!current_token.empty()) {
                 tokens.push_back(current_token);
                 current_token = "";
             }
         }
+        // Any other character (or space inside quotes)
         else {
-            // Regular character or space inside quotes
+            // Add character to current token
             current_token += ch;
         }
-    }
-
-    //case for double quotes handling
-    if(!run_for_sinlge_quote){
-
-        for (int i = 0; i < line.length(); i++) {
-        char ch = line[i];
-        
-        if (ch == '\"' && !inside_quotes) {
-            // Start of quoted string
-            inside_quotes = true;
-        }
-        else if (ch == '\"' && inside_quotes) {
-            // End of quoted string
-            inside_quotes = false;
-        }
-        else if (ch == ' ' && !inside_quotes) {
-            // this is for the case when more thean two commands are written together, like echo 'hello  world something', so in this all three are process in one go in this else block.
-            // Space outside quotes - it's a separator
-            if (!current_token.empty()) {
-                tokens.push_back(current_token);
-                current_token = "";
-            }
-        }
-        else {
-            // Regular character or space inside quotes
-            current_token += ch;
-        }
-    }
-
     }
     
     // Add the last token if any
