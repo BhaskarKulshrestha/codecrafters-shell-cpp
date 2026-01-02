@@ -16,7 +16,7 @@ using namespace std;
 // Check if a command is a builtin command
 bool is_builtin(const string& command) {
     // Set of all builtin commands
-    unordered_set<string> builtins = {"echo", "exit", "type", "pwd", "cd"};
+    unordered_set<string> builtins = {"echo", "exit", "type", "pwd", "cd", "history"};
     
     // Check if command exists in the set
     return builtins.count(command) > 0;
@@ -206,6 +206,15 @@ bool execute_builtin_in_pipeline(const vector<string>& args) {
             
             if (chdir(path.c_str()) != 0) {
                 cerr << "cd: " << path << ": No such file or directory" << endl;
+            }
+        }
+    }
+    else if (command == "history") {
+        // Display command history
+        HIST_ENTRY** hist_list = history_list();
+        if (hist_list) {
+            for (int i = 0; hist_list[i] != nullptr; i++) {
+                cout << "    " << (i + 1) << "  " << hist_list[i]->line << endl;
             }
         }
     }
@@ -649,6 +658,11 @@ int main() {
         // Convert to C++ string
         string line(line_ptr);
         
+        // Add to history if line is not empty
+        if (!line.empty()) {
+            add_history(line_ptr);
+        }
+        
         // Free the memory allocated by readline
         free(line_ptr);
         
@@ -846,6 +860,15 @@ int main() {
                     cout << "cd: " << command_tokens[1] << ": No such file or directory" << endl;
                 }
                 // If successful, directory is changed (no output needed)
+            }
+        }
+        else if (command == "history") {
+            // Display command history
+            HIST_ENTRY** hist_list = history_list();
+            if (hist_list) {
+                for (int i = 0; hist_list[i] != nullptr; i++) {
+                    cout << "    " << (i + 1) << "  " << hist_list[i]->line << endl;
+                }
             }
         }
         else {
