@@ -144,7 +144,7 @@ vector<string> parse_command_line(const string& line) {
 // Execute a pipeline of two commands
 // Execute a builtin command (for use in pipelines)
 // Returns true if command was a builtin, false otherwise
-bool execute_builtin_in_pipeline(const vector<string>& args) {
+bool execute_builtin_in_pipeline(const vector<string>& args, int& last_appended_position) {
     if (args.empty()) return false;
     
     string command = args[0];
@@ -228,8 +228,29 @@ bool execute_builtin_in_pipeline(const vector<string>& args) {
             // Write history to file
             if (write_history(filename.c_str()) == 0) {
                 // Successfully wrote history
+                last_appended_position = history_length;
             } else {
                 cerr << "history: " << filename << ": cannot write" << endl;
+            }
+            return true;
+        }
+        
+        // Handle history -a <file> (append new commands to file)
+        if (args.size() >= 3 && args[1] == "-a") {
+            string filename = args[2];
+            // Calculate how many new entries to append
+            int new_entries = history_length - last_appended_position;
+            if (new_entries > 0) {
+                // Append only the new entries
+                if (append_history(new_entries, filename.c_str()) == 0) {
+                    // Successfully appended history
+                    last_appended_position = history_length;
+                } else {
+                    cerr << "history: " << filename << ": cannot append" << endl;
+                }
+            } else {
+                // No new entries to append, just update position
+                last_appended_position = history_length;
             }
             return true;
         }
@@ -345,7 +366,8 @@ void execute_multi_pipeline(const vector<vector<string>>& commands) {
             
             // Check if it's a builtin
             if (is_builtin(cmd_args[0])) {
-                execute_builtin_in_pipeline(cmd_args);
+                int dummy_position = 0;
+                execute_builtin_in_pipeline(cmd_args, dummy_position);
                 exit(0);
             }
             
@@ -427,7 +449,8 @@ void execute_pipeline(const vector<string>& cmd1_args, const vector<string>& cmd
         
         // Check if it's a builtin
         if (cmd1_is_builtin) {
-            execute_builtin_in_pipeline(cmd1_args);
+            int dummy_position = 0;
+            execute_builtin_in_pipeline(cmd1_args, dummy_position);
             exit(0);
         }
         
@@ -469,7 +492,8 @@ void execute_pipeline(const vector<string>& cmd1_args, const vector<string>& cmd
         
         // Check if it's a builtin
         if (cmd2_is_builtin) {
-            execute_builtin_in_pipeline(cmd2_args);
+            int dummy_position = 0;
+            execute_builtin_in_pipeline(cmd2_args, dummy_position);
             exit(0);
         }
         
@@ -688,6 +712,9 @@ int main() {
     
     // Set up readline completion
     rl_attempted_completion_function = command_completion;
+    
+    // Track the history position for append operations
+    int last_appended_position = 0;
     
     // Main shell loop
     while (true) {
@@ -926,8 +953,29 @@ int main() {
                 // Write history to file
                 if (write_history(filename.c_str()) == 0) {
                     // Successfully wrote history
+                    last_appended_position = history_length;
                 } else {
                     cerr << "history: " << filename << ": cannot write" << endl;
+                }
+                continue;
+            }
+            
+            // Handle history -a <file> (append new commands to file)
+            if (command_tokens.size() >= 3 && command_tokens[1] == "-a") {
+                string filename = command_tokens[2];
+                // Calculate how many new entries to append
+                int new_entries = history_length - last_appended_position;
+                if (new_entries > 0) {
+                    // Append only the new entries
+                    if (append_history(new_entries, filename.c_str()) == 0) {
+                        // Successfully appended history
+                        last_appended_position = history_length;
+                    } else {
+                        cerr << "history: " << filename << ": cannot append" << endl;
+                    }
+                } else {
+                    // No new entries to append, just update position
+                    last_appended_position = history_length;
                 }
                 continue;
             }
