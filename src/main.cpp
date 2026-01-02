@@ -1064,5 +1064,10 @@ int main() {
         }
     }
     
+    // Save history to HISTFILE if the environment variable is set
+    if (histfile != nullptr) {
+        write_history(histfile);
+    }
+    
     return 0;
 }
