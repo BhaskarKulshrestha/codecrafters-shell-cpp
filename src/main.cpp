@@ -210,6 +210,18 @@ bool execute_builtin_in_pipeline(const vector<string>& args) {
         }
     }
     else if (command == "history") {
+        // Handle history -r <file> (read history from file)
+        if (args.size() >= 3 && args[1] == "-r") {
+            string filename = args[2];
+            // Read history from file and append to current history
+            if (read_history(filename.c_str()) == 0) {
+                // Successfully read history
+            } else {
+                cerr << "history: " << filename << ": cannot read" << endl;
+            }
+            return true;
+        }
+        
         // Display command history using readline's history
         int num_to_show = history_length;  // Default: show all
         
@@ -884,6 +896,18 @@ int main() {
             }
         }
         else if (command == "history") {
+            // Handle history -r <file> (read history from file)
+            if (command_tokens.size() >= 3 && command_tokens[1] == "-r") {
+                string filename = command_tokens[2];
+                // Read history from file and append to current history
+                if (read_history(filename.c_str()) == 0) {
+                    // Successfully read history
+                } else {
+                    cerr << "history: " << filename << ": cannot read" << endl;
+                }
+                continue;
+            }
+            
             // Display command history using readline's history
             int num_to_show = history_length;  // Default: show all
             
