@@ -7,6 +7,8 @@
 #include <unistd.h>     // for access, fork, execvp
 #include <sys/wait.h>   // for waitpid
 #include <fcntl.h>      // for open, O_WRONLY, O_CREAT, O_TRUNC
+#include <readline/readline.h>  // for readline, tab completion
+#include <readline/history.h>   // for history functions
 using namespace std;
 
 // Check if a command is a builtin command
@@ -225,21 +227,74 @@ void execute_program(const vector<string>& args, const string& stdout_file = "",
     }
 }
 
+// Completion generator function for readline
+// This function is called repeatedly to generate matches
+char* command_generator(const char* text, int state) {
+    // List of builtin commands to autocomplete
+    static vector<string> commands = {"echo", "exit"};
+    static int list_index;
+    static int len;
+    
+    // If this is a new word to complete, initialize
+    if (state == 0) {
+        list_index = 0;
+        len = strlen(text);
+    }
+    
+    // Return the next match
+    while (list_index < commands.size()) {
+        string command = commands[list_index];
+        list_index++;
+        
+        // Check if command starts with the text
+        if (command.substr(0, len) == text) {
+            // Return a copy of the matched string
+            return strdup(command.c_str());
+        }
+    }
+    
+    // No more matches
+    return nullptr;
+}
+
+// Completion function for readline
+char** command_completion(const char* text, int start, int end) {
+    // Don't use default filename completion
+    rl_attempted_completion_over = 1;
+    
+    // If we're at the start of the line, complete command names
+    if (start == 0) {
+        return rl_completion_matches(text, command_generator);
+    }
+    
+    // Otherwise, no completion
+    return nullptr;
+}
+
 int main() {
     // Enable automatic flushing of output
     cout << unitbuf;
     cerr << unitbuf;
     
+    // Set up readline completion
+    rl_attempted_completion_function = command_completion;
+    
     // Main shell loop
     while (true) {
-        // Print the prompt
-        cout << "$ ";
+        // Read a line of input using readline (handles tab completion)
+        char* line_ptr = readline("$ ");
         
-        // Read a line of input
-        string line;
-        if (!getline(cin, line)) {
-            break;  // Exit if no more input (Ctrl+D)
+        // Check if EOF (Ctrl+D)
+        if (line_ptr == nullptr) {
+            cout << endl;
+            break;
         }
+        
+        // Convert to C++ string
+        string line(line_ptr);
+        
+        // Free the memory allocated by readline
+        free(line_ptr);
         
         // Parse the line with quote support
         vector<string> tokens = parse_command_line(line);
