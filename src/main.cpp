@@ -138,7 +138,7 @@ vector<string> parse_command_line(const string& line) {
 }
 
 // Execute an external program with arguments and optional output redirection
-void execute_program(const vector<string>& args, const string& stdout_file = "", const string& stderr_file = "") {
+void execute_program(const vector<string>& args, const string& stdout_file = "", bool stdout_append = false, const string& stderr_file = "", bool stderr_append = false) {
     if (args.empty()) return;
     
     string command = args[0];
@@ -174,9 +174,10 @@ void execute_program(const vector<string>& args, const string& stdout_file = "",
         
         // If stdout redirection is specified, redirect stdout to file
         if (!stdout_file.empty()) {
-            // Open file for writing (create if not exists, truncate if exists)
-            // 0644 means read/write for owner, read for others
-            int file_fd = open(stdout_file.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            // Open file for writing
+            // O_APPEND to append, O_TRUNC to overwrite
+            int flags = O_WRONLY | O_CREAT | (stdout_append ? O_APPEND : O_TRUNC);
+            int file_fd = open(stdout_file.c_str(), flags, 0644);
             
             if (file_fd < 0) {
                 cerr << "Error: Cannot open file " << stdout_file << endl;
@@ -192,8 +193,10 @@ void execute_program(const vector<string>& args, const string& stdout_file = "",
         
         // If stderr redirection is specified, redirect stderr to file
         if (!stderr_file.empty()) {
-            // Open file for writing (create if not exists, truncate if exists)
-            int file_fd = open(stderr_file.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            // Open file for writing
+            // O_APPEND to append, O_TRUNC to overwrite
+            int flags = O_WRONLY | O_CREAT | (stderr_append ? O_APPEND : O_TRUNC);
+            int file_fd = open(stderr_file.c_str(), flags, 0644);
             
             if (file_fd < 0) {
                 cerr << "Error: Cannot open file " << stderr_file << endl;
@@ -244,29 +247,49 @@ int main() {
         // Skip empty lines
         if (tokens.empty()) continue;
         
-        // Check for output redirection (> or 1>) and error redirection (2>)
+        // Check for output redirection (>, 1>, >>, 1>>) and error redirection (2>, 2>>)
         string stdout_file = "";
+        bool stdout_append = false;
         string stderr_file = "";
+        bool stderr_append = false;
         vector<string> command_tokens;
         
         for (int i = 0; i < tokens.size(); i++) {
-            // Check if token is > or 1> (stdout redirection)
-            if (tokens[i] == ">" || tokens[i] == "1>") {
+            // Check if token is >> or 1>> (stdout append)
+            if (tokens[i] == ">>" || tokens[i] == "1>>") {
                 // Next token should be the filename
                 if (i + 1 < tokens.size()) {
                     stdout_file = tokens[i + 1];
+                    stdout_append = true;
                     i++;  // Skip the filename in next iteration
                 }
-                // Don't add > or filename to command_tokens
+            }
+            // Check if token is > or 1> (stdout redirection)
+            else if (tokens[i] == ">" || tokens[i] == "1>") {
+                // Next token should be the filename
+                if (i + 1 < tokens.size()) {
+                    stdout_file = tokens[i + 1];
+                    stdout_append = false;
+                    i++;  // Skip the filename in next iteration
+                }
+            }
+            // Check if token is 2>> (stderr append)
+            else if (tokens[i] == "2>>") {
+                // Next token should be the filename
+                if (i + 1 < tokens.size()) {
+                    stderr_file = tokens[i + 1];
+                    stderr_append = true;
+                    i++;  // Skip the filename in next iteration
+                }
             }
             // Check if token is 2> (stderr redirection)
             else if (tokens[i] == "2>") {
                 // Next token should be the filename
                 if (i + 1 < tokens.size()) {
                     stderr_file = tokens[i + 1];
+                    stderr_append = false;
                     i++;  // Skip the filename in next iteration
                 }
-                // Don't add 2> or filename to command_tokens
             }
             else {
                 // Regular token, add to command
@@ -295,7 +318,8 @@ int main() {
             // Handle stderr redirection - create empty file if specified
             if (!stderr_file.empty()) {
                 // Create empty stderr file (echo doesn't write to stderr)
-                int file_fd = open(stderr_file.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                int flags = O_WRONLY | O_CREAT | (stderr_append ? O_APPEND : O_TRUNC);
+                int file_fd = open(stderr_file.c_str(), flags, 0644);
                 if (file_fd >= 0) {
                     close(file_fd);
                 }
@@ -303,8 +327,9 @@ int main() {
             
             // Handle output redirection for echo
             if (!stdout_file.empty()) {
-                // Redirect to file
-                int file_fd = open(stdout_file.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                // Redirect to file (append or truncate)
+                int flags = O_WRONLY | O_CREAT | (stdout_append ? O_APPEND : O_TRUNC);
+                int file_fd = open(stdout_file.c_str(), flags, 0644);
                 if (file_fd >= 0) {
                     // Print all words after 'echo' to the file
                     string output = "";
@@ -373,7 +398,7 @@ int main() {
         }
         else {
             // Not a builtin, try to execute as external program
-            execute_program(command_tokens, stdout_file, stderr_file);
+            execute_program(command_tokens, stdout_file, stdout_append, stderr_file, stderr_append);
         }
     }
     
