@@ -75,8 +75,17 @@ vector<string> parse_command_line(const string& line) {
     for (int i = 0; i < line.length(); i++) {
         char ch = line[i];
         
+        // Check for backslash outside quotes (escape character)
+        if (ch == '\\' && !inside_single_quotes && !inside_double_quotes) {
+            // Skip the backslash and add the next character literally
+            i++;  // Move to next character
+            if (i < line.length()) {
+                current_token += line[i];  // Add the escaped character
+            }
+            // If no next character, ignore the backslash
+        }
         // Check for single quote
-        if (ch == '\'' && !inside_double_quotes) {
+        else if (ch == '\'' && !inside_double_quotes) {
             // Toggle single quote mode (turn on/off)
             inside_single_quotes = !inside_single_quotes;
         }
