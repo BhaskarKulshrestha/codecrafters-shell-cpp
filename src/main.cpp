@@ -63,6 +63,45 @@ void check_command_validity(const string& command) {
     }
 }
 
+// Parse command line with single quote support
+// Returns vector of tokens, handling quotes and preserving spaces within quotes
+vector<string> parse_command_line(const string& line) {
+    vector<string> tokens;
+    string current_token = "";
+    bool inside_quotes = false;
+    
+    for (int i = 0; i < line.length(); i++) {
+        char ch = line[i];
+        
+        if (ch == '\'' && !inside_quotes) {
+            // Start of quoted string
+            inside_quotes = true;
+        }
+        else if (ch == '\'' && inside_quotes) {
+            // End of quoted string
+            inside_quotes = false;
+        }
+        else if (ch == ' ' && !inside_quotes) {
+            // Space outside quotes - it's a separator
+            if (!current_token.empty()) {
+                tokens.push_back(current_token);
+                current_token = "";
+            }
+        }
+        else {
+            // Regular character or space inside quotes
+            current_token += ch;
+        }
+    }
+    
+    // Add the last token if any
+    if (!current_token.empty()) {
+        tokens.push_back(current_token);
+    }
+    
+    return tokens;
+}
+
 // Execute an external program with arguments
 void execute_program(const vector<string>& args) {
     if (args.empty()) return;
@@ -128,14 +167,8 @@ int main() {
             break;  // Exit if no more input (Ctrl+D)
         }
         
-        // Split the line into words (tokens)
-        stringstream ss(line);
-        vector<string> tokens;
-        string word;
-        
-        while (ss >> word) {
-            tokens.push_back(word);
-        }
+        // Parse the line with quote support
+        vector<string> tokens = parse_command_line(line);
         
         // Skip empty lines
         if (tokens.empty()) continue;
