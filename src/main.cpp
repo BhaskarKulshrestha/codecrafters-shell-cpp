@@ -211,7 +211,25 @@ bool execute_builtin_in_pipeline(const vector<string>& args) {
     }
     else if (command == "history") {
         // Display command history using readline's history
-        for (int i = 0; i < history_length; i++) {
+        int num_to_show = history_length;  // Default: show all
+        
+        // Check if user specified a limit
+        if (args.size() > 1) {
+            try {
+                num_to_show = stoi(args[1]);
+                if (num_to_show < 0) {
+                    num_to_show = 0;
+                }
+            } catch (...) {
+                cerr << "history: numeric argument required" << endl;
+                return true;
+            }
+        }
+        
+        // Calculate start index (show last num_to_show entries)
+        int start_index = max(0, history_length - num_to_show);
+        
+        for (int i = start_index; i < history_length; i++) {
             HIST_ENTRY* entry = history_get(i + history_base);
             if (entry) {
                 cout << "    " << (i + 1) << "  " << entry->line << endl;
@@ -867,7 +885,25 @@ int main() {
         }
         else if (command == "history") {
             // Display command history using readline's history
-            for (int i = 0; i < history_length; i++) {
+            int num_to_show = history_length;  // Default: show all
+            
+            // Check if user specified a limit
+            if (command_tokens.size() > 1) {
+                try {
+                    num_to_show = stoi(command_tokens[1]);
+                    if (num_to_show < 0) {
+                        num_to_show = 0;
+                    }
+                } catch (...) {
+                    cerr << "history: numeric argument required" << endl;
+                    continue;
+                }
+            }
+            
+            // Calculate start index (show last num_to_show entries)
+            int start_index = max(0, history_length - num_to_show);
+            
+            for (int i = start_index; i < history_length; i++) {
                 HIST_ENTRY* entry = history_get(i + history_base);
                 if (entry) {
                     cout << "    " << (i + 1) << "  " << entry->line << endl;
