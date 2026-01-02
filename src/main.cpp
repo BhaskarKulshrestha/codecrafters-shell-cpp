@@ -292,6 +292,15 @@ int main() {
             }
         }
         else if (command == "echo") {
+            // Handle stderr redirection - create empty file if specified
+            if (!stderr_file.empty()) {
+                // Create empty stderr file (echo doesn't write to stderr)
+                int file_fd = open(stderr_file.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                if (file_fd >= 0) {
+                    close(file_fd);
+                }
+            }
+            
             // Handle output redirection for echo
             if (!stdout_file.empty()) {
                 // Redirect to file
