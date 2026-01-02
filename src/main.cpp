@@ -7,6 +7,8 @@
 #include <unistd.h>     // for access, fork, execvp
 #include <sys/wait.h>   // for waitpid
 #include <fcntl.h>      // for open, O_WRONLY, O_CREAT, O_TRUNC
+#include <dirent.h>     // for opendir, readdir, closedir
+#include <cstring>      // for strlen, strdup
 #include <readline/readline.h>  // for readline, tab completion
 #include <readline/history.h>   // for history functions
 using namespace std;
@@ -231,7 +233,8 @@ void execute_program(const vector<string>& args, const string& stdout_file = "",
 // This function is called repeatedly to generate matches
 char* command_generator(const char* text, int state) {
     // List of builtin commands to autocomplete
-    static vector<string> commands = {"echo", "exit"};
+    static vector<string> builtin_commands = {"echo", "exit"};
+    static vector<string> all_commands;
     static int list_index;
     static int len;
     
@@ -239,18 +242,68 @@ char* command_generator(const char* text, int state) {
     if (state == 0) {
         list_index = 0;
         len = strlen(text);
+        all_commands.clear();
+        
+        // Add builtin commands that match
+        for (const auto& cmd : builtin_commands) {
+            if (cmd.substr(0, len) == text) {
+                all_commands.push_back(cmd);
+            }
+        }
+        
+        // Search for executables in PATH
+        const char* path_ptr = getenv("PATH");
+        if (path_ptr != nullptr) {
+            string path_env = string(path_ptr);
+            stringstream ss(path_env);
+            string directory;
+            
+            // Split PATH by ':' and check each directory
+            while (getline(ss, directory, ':')) {
+                if (directory.empty()) continue;
+                
+                // Open directory to list files
+                DIR* dir = opendir(directory.c_str());
+                if (dir == nullptr) continue;
+                
+                struct dirent* entry;
+                while ((entry = readdir(dir)) != nullptr) {
+                    string filename = entry->d_name;
+                    
+                    // Skip . and ..
+                    if (filename == "." || filename == "..") continue;
+                    
+                    // Check if filename starts with the text
+                    if (filename.substr(0, len) == text) {
+                        // Build full path
+                        string full_path = directory + "/" + filename;
+                        
+                        // Check if it's executable
+                        if (access(full_path.c_str(), X_OK) == 0) {
+                            // Check if not already in the list (avoid duplicates)
+                            bool already_added = false;
+                            for (const auto& cmd : all_commands) {
+                                if (cmd == filename) {
+                                    already_added = true;
+                                    break;
+                                }
+                            }
+                            if (!already_added) {
+                                all_commands.push_back(filename);
+                            }
+                        }
+                    }
+                }
+                closedir(dir);
+            }
+        }
     }
     
     // Return the next match
-    while (list_index < commands.size()) {
-        string command = commands[list_index];
+    if (list_index < all_commands.size()) {
+        string command = all_commands[list_index];
         list_index++;
-        
-        // Check if command starts with the text
-        if (command.substr(0, len) == text) {
-            // Return a copy of the matched string
-            return strdup(command.c_str());
-        }
+        return strdup(command.c_str());
     }
     
     // No more matches
