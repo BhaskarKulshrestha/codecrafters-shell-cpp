@@ -210,11 +210,11 @@ bool execute_builtin_in_pipeline(const vector<string>& args) {
         }
     }
     else if (command == "history") {
-        // Display command history
-        HIST_ENTRY** hist_list = history_list();
-        if (hist_list) {
-            for (int i = 0; hist_list[i] != nullptr; i++) {
-                cout << "    " << (i + 1) << "  " << hist_list[i]->line << endl;
+        // Display command history using readline's history
+        for (int i = 0; i < history_length; i++) {
+            HIST_ENTRY* entry = history_get(i + history_base);
+            if (entry) {
+                cout << "    " << (i + 1) << "  " << entry->line << endl;
             }
         }
     }
@@ -243,17 +243,20 @@ void execute_multi_pipeline(const vector<vector<string>>& commands) {
     }
     
     // Create pipes: we need (num_commands - 1) pipes
-    vector<int[2]> pipes(num_commands - 1);
+    // Each pipe has 2 file descriptors: [0] = read end, [1] = write end
+    vector<pair<int, int>> pipes(num_commands - 1);
     for (int i = 0; i < num_commands - 1; i++) {
-        if (pipe(pipes[i]) < 0) {
+        int pipe_fds[2];
+        if (pipe(pipe_fds) < 0) {
             cerr << "Error: Failed to create pipe" << endl;
             // Close previously created pipes
             for (int j = 0; j < i; j++) {
-                close(pipes[j][0]);
-                close(pipes[j][1]);
+                close(pipes[j].first);
+                close(pipes[j].second);
             }
             return;
         }
+        pipes[i] = make_pair(pipe_fds[0], pipe_fds[1]);
     }
     
     // Fork processes for each command
@@ -266,8 +269,8 @@ void execute_multi_pipeline(const vector<vector<string>>& commands) {
             cerr << "Error: Failed to fork process" << endl;
             // Clean up pipes
             for (int j = 0; j < num_commands - 1; j++) {
-                close(pipes[j][0]);
-                close(pipes[j][1]);
+                close(pipes[j].first);
+                close(pipes[j].second);
             }
             // Wait for already forked processes
             for (pid_t p : pids) {
@@ -281,18 +284,18 @@ void execute_multi_pipeline(const vector<vector<string>>& commands) {
             
             // Set up stdin: read from previous pipe (if not first command)
             if (i > 0) {
-                dup2(pipes[i - 1][0], 0);
+                dup2(pipes[i - 1].first, 0);
             }
             
             // Set up stdout: write to next pipe (if not last command)
             if (i < num_commands - 1) {
-                dup2(pipes[i][1], 1);
+                dup2(pipes[i].second, 1);
             }
             
             // Close all pipe file descriptors
             for (int j = 0; j < num_commands - 1; j++) {
-                close(pipes[j][0]);
-                close(pipes[j][1]);
+                close(pipes[j].first);
+                close(pipes[j].second);
             }
             
             // Execute the command
@@ -325,8 +328,8 @@ void execute_multi_pipeline(const vector<vector<string>>& commands) {
     
     // Parent process: close all pipe file descriptors
     for (int i = 0; i < num_commands - 1; i++) {
-        close(pipes[i][0]);
-        close(pipes[i][1]);
+        close(pipes[i].first);
+        close(pipes[i].second);
     }
     
     // Wait for all children to complete
@@ -863,11 +866,11 @@ int main() {
             }
         }
         else if (command == "history") {
-            // Display command history
-            HIST_ENTRY** hist_list = history_list();
-            if (hist_list) {
-                for (int i = 0; hist_list[i] != nullptr; i++) {
-                    cout << "    " << (i + 1) << "  " << hist_list[i]->line << endl;
+            // Display command history using readline's history
+            for (int i = 0; i < history_length; i++) {
+                HIST_ENTRY* entry = history_get(i + history_base);
+                if (entry) {
+                    cout << "    " << (i + 1) << "  " << entry->line << endl;
                 }
             }
         }
