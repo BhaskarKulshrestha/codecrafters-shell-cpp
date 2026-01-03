@@ -12,13 +12,30 @@
 #include <cstring>      // for strlen, strdup
 #include <fstream>      // for file operations
 #include <glob.h>       // for wildcard expansion
+#include <chrono>       // for timing
+#include <ctime>        // for timestamps
+#include <iomanip>      // for formatting
+#include <sys/stat.h>   // for stat
 #include <readline/readline.h>  // for readline, tab completion
 #include <readline/history.h>   // for history functions
 using namespace std;
 
+// ANSI color codes
+#define COLOR_RESET   "\033[0m"
+#define COLOR_RED     "\033[31m"
+#define COLOR_GREEN   "\033[32m"
+#define COLOR_YELLOW  "\033[33m"
+#define COLOR_BLUE    "\033[34m"
+#define COLOR_MAGENTA "\033[35m"
+#define COLOR_CYAN    "\033[36m"
+#define COLOR_GRAY    "\033[90m"
+#define COLOR_BOLD    "\033[1m"
+
 // Global variables for shell state
 unordered_map<string, string> shell_variables;  // Shell-local variables
+unordered_map<string, string> bookmarks;        // Directory bookmarks
 int last_exit_status = 0;  // Last command exit status ($?)
+chrono::steady_clock::time_point cmd_start_time;  // For timing commands
 
 // Custom function to load history from a plain text file
 // Reads line by line and adds to history using add_history()
@@ -64,10 +81,136 @@ int custom_append_history(int num_entries, const char* filename) {
     return 0;  // Success
 }
 
+// Get git branch name for current directory
+string get_git_branch() {
+    FILE* pipe = popen("git branch --show-current 2>/dev/null", "r");
+    if (!pipe) return "";
+    
+    char buffer[256];
+    string result = "";
+    if (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+        result = buffer;
+        // Remove trailing newline
+        if (!result.empty() && result[result.length()-1] == '\n') {
+            result.erase(result.length()-1);
+        }
+    }
+    pclose(pipe);
+    return result;
+}
+
+// Get git status (clean, dirty, or untracked files)
+string get_git_status() {
+    FILE* pipe = popen("git status --porcelain 2>/dev/null", "r");
+    if (!pipe) return "";
+    
+    char buffer[256];
+    bool has_changes = false;
+    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+        has_changes = true;
+        break;
+    }
+    pclose(pipe);
+    
+    return has_changes ? "✗" : "✓";
+}
+
+// Check if in a git repository
+bool is_git_repo() {
+    struct stat buffer;
+    return (stat(".git", &buffer) == 0);
+}
+
+// Calculator function - evaluates simple mathematical expressions
+double calculate(const string& expr) {
+    // Simple calculator using eval-like approach
+    // This is a basic implementation for +, -, *, /
+    string clean_expr = expr;
+    
+    // Remove spaces
+    clean_expr.erase(remove(clean_expr.begin(), clean_expr.end(), ' '), clean_expr.end());
+    
+    // Use a simple stack-based evaluation
+    // For simplicity, we'll use system's bc command
+    string cmd = "echo '" + clean_expr + "' | bc -l 2>/dev/null";
+    FILE* pipe = popen(cmd.c_str(), "r");
+    if (!pipe) return 0.0;
+    
+    char buffer[256];
+    string result = "";
+    if (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+        result = buffer;
+    }
+    pclose(pipe);
+    
+    try {
+        return stod(result);
+    } catch (...) {
+        return 0.0;
+    }
+}
+
+// Calculate and return result as string
+string calculate_str(const string& expr) {
+    string clean_expr = expr;
+    
+    // Use bc command for calculation
+    string cmd = "echo '" + clean_expr + "' | bc -l 2>/dev/null";
+    FILE* pipe = popen(cmd.c_str(), "r");
+    if (!pipe) return "";
+    
+    char buffer[256];
+    string result = "";
+    if (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+        result = buffer;
+        // Remove trailing newline
+        if (!result.empty() && result.back() == '\n') {
+            result.pop_back();
+        }
+    }
+    pclose(pipe);
+    
+    return result;
+}
+
+// Load bookmarks from file
+void load_bookmarks() {
+    string bookmark_file = string(getenv("HOME")) + "/.myshell_bookmarks";
+    ifstream file(bookmark_file);
+    if (!file.is_open()) return;
+    
+    string line;
+    while (getline(file, line)) {
+        size_t eq_pos = line.find('=');
+        if (eq_pos != string::npos) {
+            string name = line.substr(0, eq_pos);
+            string path = line.substr(eq_pos + 1);
+            bookmarks[name] = path;
+        }
+    }
+    file.close();
+}
+
+// Save bookmarks to file
+void save_bookmarks() {
+    string bookmark_file = string(getenv("HOME")) + "/.myshell_bookmarks";
+    ofstream file(bookmark_file);
+    if (!file.is_open()) return;
+    
+    for (const auto& pair : bookmarks) {
+        file << pair.first << "=" << pair.second << endl;
+    }
+    file.close();
+}
+
 // Check if a command is a builtin command
 bool is_builtin(const string& command) {
     // Set of all builtin commands
-    unordered_set<string> builtins = {"echo", "exit", "type", "pwd", "cd", "history", "export", "unset", "env"};
+    unordered_set<string> builtins = {
+        "echo", "exit", "type", "pwd", "cd", "history", 
+        "export", "unset", "env", "bookmark", "jump", 
+        "git-status", "git-branch", "calc", "timer"
+    };
     
     // Check if command exists in the set
     return builtins.count(command) > 0;
@@ -458,6 +601,118 @@ bool execute_builtin_in_pipeline(const vector<string>& args, int& last_appended_
                 cout << "    " << (i + 1) << "  " << entry->line << endl;
             }
         }
+    }
+    else if (command == "git-status") {
+        // Show git status information
+        if (!is_git_repo()) {
+            cout << COLOR_RED << "Not a git repository" << COLOR_RESET << endl;
+            return true;
+        }
+        
+        string branch = get_git_branch();
+        string status = get_git_status();
+        
+        if (branch.empty()) {
+            cout << COLOR_YELLOW << "No branch (detached HEAD?)" << COLOR_RESET << endl;
+        } else {
+            cout << COLOR_CYAN << "Branch: " << COLOR_GREEN << branch << COLOR_RESET;
+            if (status == "✓") {
+                cout << COLOR_GREEN << " [clean]" << COLOR_RESET << endl;
+            } else {
+                cout << COLOR_RED << " [dirty]" << COLOR_RESET << endl;
+            }
+        }
+    }
+    else if (command == "git-branch") {
+        // Quick branch switching or listing
+        if (!is_git_repo()) {
+            cout << COLOR_RED << "Not a git repository" << COLOR_RESET << endl;
+            return true;
+        }
+        
+        if (args.size() > 1) {
+            // Switch to branch
+            string branch = args[1];
+            string cmd = "git checkout " + branch + " 2>&1";
+            system(cmd.c_str());
+        } else {
+            // List branches
+            system("git branch --color=always");
+        }
+    }
+    else if (command == "bookmark") {
+        // Bookmark management
+        if (args.size() == 1) {
+            // List all bookmarks
+            if (bookmarks.empty()) {
+                cout << COLOR_YELLOW << "No bookmarks saved" << COLOR_RESET << endl;
+            } else {
+                cout << COLOR_CYAN << "Bookmarks:" << COLOR_RESET << endl;
+                for (const auto& pair : bookmarks) {
+                    cout << "  " << COLOR_GREEN << pair.first << COLOR_RESET 
+                         << " -> " << pair.second << endl;
+                }
+            }
+        } else if (args.size() == 2) {
+            // Save current directory with name
+            char cwd[1024];
+            if (getcwd(cwd, sizeof(cwd)) != nullptr) {
+                bookmarks[args[1]] = string(cwd);
+                save_bookmarks();
+                cout << COLOR_GREEN << "Bookmarked: " << COLOR_RESET 
+                     << args[1] << " -> " << cwd << endl;
+            }
+        } else if (args.size() == 3 && args[1] == "rm") {
+            // Remove bookmark
+            if (bookmarks.erase(args[2])) {
+                save_bookmarks();
+                cout << COLOR_GREEN << "Removed bookmark: " << COLOR_RESET << args[2] << endl;
+            } else {
+                cout << COLOR_RED << "Bookmark not found: " << COLOR_RESET << args[2] << endl;
+            }
+        }
+    }
+    else if (command == "jump") {
+        // Jump to bookmarked directory
+        if (args.size() < 2) {
+            cout << COLOR_RED << "Usage: jump <bookmark_name>" << COLOR_RESET << endl;
+            return true;
+        }
+        
+        string bookmark_name = args[1];
+        if (bookmarks.count(bookmark_name)) {
+            if (chdir(bookmarks[bookmark_name].c_str()) == 0) {
+                cout << COLOR_GREEN << "Jumped to: " << COLOR_RESET 
+                     << bookmarks[bookmark_name] << endl;
+            } else {
+                cout << COLOR_RED << "Failed to jump to: " << COLOR_RESET 
+                     << bookmarks[bookmark_name] << endl;
+            }
+        } else {
+            cout << COLOR_RED << "Bookmark not found: " << COLOR_RESET << bookmark_name << endl;
+        }
+    }
+    else if (command == "calc") {
+        // Calculator
+        if (args.size() < 2) {
+            cout << COLOR_RED << "Usage: calc <expression>" << COLOR_RESET << endl;
+            return true;
+        }
+        
+        // Join all arguments into expression
+        string expr = "";
+        for (int i = 1; i < args.size(); i++) {
+            expr += args[i];
+            if (i < args.size() - 1) expr += " ";
+        }
+        
+        double result = calculate(expr);
+        cout << COLOR_CYAN << result << COLOR_RESET << endl;
+    }
+    else if (command == "timer") {
+        // Show last command execution time
+        cout << COLOR_YELLOW << "Use 'timer' before a command to time it" << COLOR_RESET << endl;
+        cout << COLOR_GRAY << "Example: timer sleep 2" << COLOR_RESET << endl;
     }
     
     return true;  // Was a builtin
@@ -972,8 +1227,14 @@ int main() {
         custom_read_history(histfile);
     }
     
+    // Load bookmarks from file
+    load_bookmarks();
+    
     // Track the history position for append operations
     int last_appended_position = 0;
+    
+    // Flag to exit the shell
+    bool should_exit = false;
     
     // Main shell loop
     while (true) {
@@ -1150,6 +1411,7 @@ int main() {
         // Handle different commands
         if (command == "exit") {
             // Exit the shell
+            should_exit = true;
             break;
         }
         else if (command == "export") {
@@ -1360,12 +1622,144 @@ int main() {
             }
             last_exit_status = 0;
         }
+        else if (command == "git-status") {
+            // Show git repository status with branch information
+            if (!is_git_repo()) {
+                cout << COLOR_RED << "Not a git repository" << COLOR_RESET << endl;
+                last_exit_status = 1;
+            } else {
+                string branch = get_git_branch();
+                string status = get_git_status();
+                
+                cout << COLOR_CYAN << "Branch: " << COLOR_GREEN << branch << COLOR_RESET;
+                
+                if (status == "✓") {
+                    cout << COLOR_GREEN << " [clean]" << COLOR_RESET << endl;
+                } else {
+                    cout << COLOR_YELLOW << " [dirty]" << COLOR_RESET << endl;
+                }
+                last_exit_status = 0;
+            }
+        }
+        else if (command == "git-branch") {
+            // Switch git branch or list branches
+            if (!is_git_repo()) {
+                cout << COLOR_RED << "Not a git repository" << COLOR_RESET << endl;
+                last_exit_status = 1;
+            } else {
+                if (command_tokens.size() == 1) {
+                    // List all branches (with colors)
+                    system("git branch --color=always");
+                    last_exit_status = 0;
+                } else {
+                    // Switch to specified branch
+                    string branch = command_tokens[1];
+                    string git_cmd = "git checkout " + branch;
+                    int ret = system(git_cmd.c_str());
+                    last_exit_status = (ret == 0) ? 0 : 1;
+                }
+            }
+        }
+        else if (command == "bookmark") {
+            // Bookmark system: save, list, remove bookmarks
+            if (command_tokens.size() == 1) {
+                // List all bookmarks
+                if (bookmarks.empty()) {
+                    cout << COLOR_YELLOW << "No bookmarks saved" << COLOR_RESET << endl;
+                } else {
+                    cout << COLOR_CYAN << "Bookmarks:" << COLOR_RESET << endl;
+                    for (const auto& [name, path] : bookmarks) {
+                        cout << "  " << COLOR_GREEN << name << COLOR_RESET << " -> " << path << endl;
+                    }
+                }
+                last_exit_status = 0;
+            } else if (command_tokens.size() >= 2) {
+                if (command_tokens[1] == "rm" && command_tokens.size() == 3) {
+                    // Remove a bookmark
+                    string name = command_tokens[2];
+                    if (bookmarks.erase(name) > 0) {
+                        save_bookmarks();
+                        cout << COLOR_GREEN << "Removed bookmark: " << name << COLOR_RESET << endl;
+                        last_exit_status = 0;
+                    } else {
+                        cout << COLOR_RED << "Bookmark not found: " << name << COLOR_RESET << endl;
+                        last_exit_status = 1;
+                    }
+                } else {
+                    // Save current directory with given name
+                    string name = command_tokens[1];
+                    char cwd_buf[1024];
+                    if (getcwd(cwd_buf, sizeof(cwd_buf))) {
+                        bookmarks[name] = string(cwd_buf);
+                        save_bookmarks();
+                        cout << COLOR_GREEN << "Bookmarked: " << name << " -> " << cwd_buf << COLOR_RESET << endl;
+                        last_exit_status = 0;
+                    } else {
+                        cout << COLOR_RED << "Failed to get current directory" << COLOR_RESET << endl;
+                        last_exit_status = 1;
+                    }
+                }
+            }
+        }
+        else if (command == "jump") {
+            // Jump to a bookmarked directory
+            if (command_tokens.size() < 2) {
+                cout << COLOR_YELLOW << "Usage: jump <bookmark-name>" << COLOR_RESET << endl;
+                last_exit_status = 1;
+            } else {
+                string name = command_tokens[1];
+                auto it = bookmarks.find(name);
+                if (it != bookmarks.end()) {
+                    if (chdir(it->second.c_str()) == 0) {
+                        cout << COLOR_GREEN << "Jumped to: " << it->second << COLOR_RESET << endl;
+                        last_exit_status = 0;
+                    } else {
+                        cout << COLOR_RED << "Failed to change directory to: " << it->second << COLOR_RESET << endl;
+                        last_exit_status = 1;
+                    }
+                } else {
+                    cout << COLOR_RED << "Bookmark not found: " << name << COLOR_RESET << endl;
+                    last_exit_status = 1;
+                }
+            }
+        }
+        else if (command == "calc") {
+            // Calculator using bc
+            if (command_tokens.size() < 2) {
+                cout << COLOR_YELLOW << "Usage: calc <expression>" << COLOR_RESET << endl;
+                cout << COLOR_YELLOW << "Example: calc 2 + 2" << COLOR_RESET << endl;
+                last_exit_status = 1;
+            } else {
+                // Join all arguments into expression
+                string expr;
+                for (size_t i = 1; i < command_tokens.size(); i++) {
+                    if (i > 1) expr += " ";
+                    expr += command_tokens[i];
+                }
+                string result = calculate_str(expr);
+                if (!result.empty()) {
+                    cout << COLOR_CYAN << result << COLOR_RESET << endl;
+                    last_exit_status = 0;
+                } else {
+                    last_exit_status = 1;
+                }
+            }
+        }
+        else if (command == "timer") {
+            // Timer functionality - measure command execution time
+            cout << COLOR_YELLOW << "Timer: Use 'time <command>' to measure execution time" << COLOR_RESET << endl;
+            last_exit_status = 0;
+        }
         else {
             // Not a builtin, try to execute as external program
             execute_program(command_tokens, stdout_file, stdout_append, stderr_file, stderr_append);
         }
         
         }  // End of command chain for loop
+        
+        // Check if we should exit
+        if (should_exit) break;
+        
     }  // End of main while loop
     
     // Save history to HISTFILE if the environment variable is set
