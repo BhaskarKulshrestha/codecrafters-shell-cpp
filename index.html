@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="A modern Unix shell built in C++ with advanced features like job control, syntax highlighting, and pipeline support.">
+    <meta name="keywords" content="shell, bash, C++, terminal, unix, command line, job control">
+    <meta name="author" content="Bhaskar Kulshrestha">
+    
+    <title>C++ Shell - Modern Unix Shell with Advanced Features</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary-color: #00d4ff;
+            --secondary-color: #00ff88;
+            --accent-color: #ff00ff;
+            --accent-2: #ffaa00;
+            --dark-bg: #0a0e27;
+            --darker-bg: #050818;
+            --card-bg: rgba(15, 23, 42, 0.7);
+            --text-primary: #ffffff;
+            --text-secondary: #b4c7e7;
+            --border-color: rgba(59, 130, 246, 0.2);
+            --code-bg: rgba(30, 41, 59, 0.8);
+            --success: #00ff88;
+            --warning: #ffaa00;
+            --error: #ff0055;
+            --glow-primary: rgba(0, 212, 255, 0.5);
+            --glow-secondary: rgba(0, 255, 136, 0.5);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--darker-bg);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+            position: relative;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse at 10% 0%, rgba(0, 212, 255, 0.15), transparent 50%),
+                radial-gradient(ellipse at 90% 0%, rgba(255, 0, 255, 0.15), transparent 50%),
+                radial-gradient(ellipse at 50% 100%, rgba(0, 255, 136, 0.1), transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        /* Animated gradient mesh background */
+        .gradient-bg {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: -1;
+            opacity: 0.4;
+        }
+        
+        .gradient-bg::before,
+        .gradient-bg::after {
+            content: '';
+            position: absolute;
+            width: 800px;
+            height: 800px;
+            border-radius: 50%;
+            filter: blur(80px);
+            animation: float-rotate 20s infinite alternate;
+        }
+        
+        .gradient-bg::before {
+            background: radial-gradient(circle, var(--primary-color) 0%, transparent 70%);
+            top: -200px;
+            left: -200px;
+            animation-delay: -5s;
+        }
+        
+        .gradient-bg::after {
+            background: radial-gradient(circle, var(--accent-color) 0%, transparent 70%);
+            bottom: -200px;
+            right: -200px;
+        }
+        
+        @keyframes float-rotate {
+            0%, 100% {
+                transform: translate(0, 0) rotate(0deg);
+            }
+            33% {
+                transform: translate(50px, -50px) rotate(120deg);
+            }
+            66% {
+                transform: translate(-50px, 50px) rotate(240deg);
+            }
+        }
+        
+        /* Particles Background */
+        #particles-js {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: 0;
+        }
+        
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 1000px;
+            height: 1000px;
+            background: radial-gradient(circle, var(--glow-primary) 0%, transparent 70%);
+            transform: translate(-50%, -50%);
+            animation: pulse-glow 4s ease-in-out infinite;
+            pointer-events: none;
+        }
+        
+        @keyframes pulse-glow {
+            0%, 100% {
+                opacity: 0.3;
+                transform: translate(-50%, -50%) scale(1);
+            }
+            50% {
+                opacity: 0.6;
+                transform: translate(-50%, -50%) scale(1.1);
+            }
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .hero-content {
+            text-align: center;
+            animation: fadeInUp 0.8s ease-out;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .hero h1 {
+            font-size: 5.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 50%, var(--accent-color) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.02em;
+            position: relative;
+            text-shadow: 0 0 80px var(--glow-primary);
+            animation: glow-text 3s ease-in-out infinite;
+        }
+        
+        @keyframes glow-text {
+            0%, 100% {
+                filter: drop-shadow(0 0 20px var(--glow-primary));
+            }
+            50% {
+                filter: drop-shadow(0 0 40px var(--glow-secondary));
+            }
+        }
+        
+        .hero .subtitle {
+            font-size: 1.8rem;
+            color: var(--text-primary);
+            margin-bottom: 1.5rem;
+            font-weight: 400;
+            letter-spacing: -0.01em;
+        }
+        
+        .hero .tagline {
+            font-size: 1.3rem;
+            color: var(--text-secondary);
+            margin-bottom: 3rem;
+            line-height: 1.8;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .cta-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 3rem;
+        }
+        
+        .btn {
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: var(--darker-bg);
+            font-weight: 600;
+            box-shadow: 0 0 30px var(--glow-primary);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s;
+        }
+        
+        .btn-primary:hover::before {
+            left: 100%;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 0 50px var(--glow-primary);
+        }
+        
+        .btn-secondary {
+            background: rgba(15, 23, 42, 0.5);
+            color: var(--text-primary);
+            border: 2px solid var(--primary-color);
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-secondary::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(0, 212, 255, 0.1);
+            transform: translate(-50%, -50%);
+            transition: width 0.5s, height 0.5s;
+        }
+        
+        .btn-secondary:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+        
+        .btn-secondary:hover {
+            border-color: var(--secondary-color);
+            transform: translateY(-3px);
+            box-shadow: 0 0 30px var(--glow-secondary);
+        }
+        
+        /* Terminal Demo */
+        .terminal-demo {
+            max-width: 900px;
+            margin: 0 auto;
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 1rem;
+            overflow: hidden;
+            box-shadow: 
+                0 0 0 1px rgba(0, 212, 255, 0.3),
+                0 20px 80px rgba(0, 0, 0, 0.7),
+                0 0 100px var(--glow-primary);
+            animation: fadeInUp 0.8s ease-out 0.2s backwards, terminal-glow 3s ease-in-out infinite;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            position: relative;
+        }
+        
+        .terminal-demo::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--primary-color), transparent);
+            animation: scan-line 3s linear infinite;
+        }
+        
+        @keyframes scan-line {
+            0%, 100% { opacity: 0; }
+            50% { opacity: 1; }
+        }
+        
+        @keyframes terminal-glow {
+            0%, 100% {
+                box-shadow: 
+                    0 0 0 1px rgba(0, 212, 255, 0.3),
+                    0 20px 80px rgba(0, 0, 0, 0.7),
+                    0 0 100px rgba(0, 212, 255, 0.3);
+            }
+            50% {
+                box-shadow: 
+                    0 0 0 1px rgba(0, 255, 136, 0.5),
+                    0 20px 80px rgba(0, 0, 0, 0.7),
+                    0 0 120px rgba(0, 255, 136, 0.4);
+            }
+        }
+        
+        .terminal-header {
+            background: rgba(30, 41, 59, 0.8);
+            padding: 1rem 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+        
+        .terminal-button {
+            width: 13px;
+            height: 13px;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .terminal-button.close { 
+            background: #ff5f56;
+            box-shadow: 0 0 10px rgba(255, 95, 86, 0.5);
+        }
+        .terminal-button.minimize { 
+            background: #ffbd2e;
+            box-shadow: 0 0 10px rgba(255, 189, 46, 0.5);
+        }
+        .terminal-button.maximize { 
+            background: #27c93f;
+            box-shadow: 0 0 10px rgba(39, 201, 63, 0.5);
+        }
+        
+        .terminal-button:hover {
+            transform: scale(1.2);
+        }
+        
+        .terminal-title {
+            margin-left: auto;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        
+        .terminal-body {
+            padding: 2rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            line-height: 2;
+            background: rgba(10, 14, 39, 0.5);
+            min-height: 300px;
+        }
+        
+        .terminal-line {
+            margin-bottom: 0.5rem;
+            opacity: 0;
+            animation: line-appear 0.5s ease-out forwards;
+        }
+        
+        .terminal-line:nth-child(1) { animation-delay: 0.5s; }
+        .terminal-line:nth-child(2) { animation-delay: 0.8s; }
+        .terminal-line:nth-child(3) { animation-delay: 1.1s; }
+        .terminal-line:nth-child(4) { animation-delay: 1.4s; }
+        .terminal-line:nth-child(5) { animation-delay: 1.7s; }
+        .terminal-line:nth-child(6) { animation-delay: 2s; }
+        .terminal-line:nth-child(7) { animation-delay: 2.3s; }
+        .terminal-line:nth-child(8) { animation-delay: 2.6s; }
+        .terminal-line:nth-child(9) { animation-delay: 2.9s; }
+        
+        @keyframes line-appear {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .prompt {
+            color: var(--primary-color);
+            font-weight: 600;
+            text-shadow: 0 0 10px var(--glow-primary);
+        }
+        
+        .command {
+            color: var(--secondary-color);
+            text-shadow: 0 0 10px var(--glow-secondary);
+        }
+        
+        .output {
+            color: var(--text-secondary);
+        }
+        
+        .comment {
+            color: #7c8db0;
+            font-style: italic;
+        }
+        
+        .cursor {
+            display: inline-block;
+            width: 10px;
+            height: 20px;
+            background: var(--primary-color);
+            margin-left: 5px;
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+        
+        /* Features Section */
+        .features {
+            padding: 6rem 0;
+            background: var(--darker-bg);
+        }
+        
+        .section-title {
+            text-align: center;
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.02em;
+        }
+        
+        .section-subtitle {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 1.3rem;
+            margin-bottom: 5rem;
+            font-weight: 300;
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+        
+        .feature-card {
+            background: rgba(15, 23, 42, 0.6);
+            padding: 2.5rem;
+            border-radius: 1.5rem;
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at top left, var(--glow-primary), transparent 50%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+        
+        .feature-card:hover::before {
+            opacity: 0.1;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-10px) scale(1.02);
+            border-color: var(--primary-color);
+            box-shadow: 
+                0 0 0 1px rgba(0, 212, 255, 0.4),
+                0 20px 60px rgba(0, 212, 255, 0.3),
+                0 0 80px rgba(0, 212, 255, 0.2);
+        }
+        
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color), var(--accent-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            position: relative;
+            z-index: 1;
+            display: inline-block;
+            transition: transform 0.4s ease;
+        }
+        
+        .feature-card:hover .feature-icon {
+            transform: scale(1.1) rotateY(360deg);
+        }
+        
+        .feature-card h3 {
+            font-size: 1.6rem;
+            margin-bottom: 1rem;
+            position: relative;
+            z-index: 1;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+        }
+        
+        .feature-card p {
+            color: var(--text-secondary);
+            line-height: 1.9;
+            position: relative;
+            z-index: 1;
+            font-size: 1.05rem;
+        }
+        
+        /* Installation Section */
+        .installation {
+            padding: 6rem 0;
+            background: var(--dark-bg);
+        }
+        
+        .install-steps {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .install-step {
+            background: rgba(15, 23, 42, 0.6);
+            padding: 2.5rem;
+            border-radius: 1.5rem;
+            margin-bottom: 2rem;
+            border: 1px solid rgba(0, 212, 255, 0.2);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+        
+        .install-step:hover {
+            border-color: var(--primary-color);
+            transform: translateX(10px);
+            box-shadow: 0 10px 40px rgba(0, 212, 255, 0.2);
+        }
+        
+        .install-step h3 {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+        }
+        
+        .step-number {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: var(--darker-bg);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.1rem;
+            box-shadow: 0 0 20px var(--glow-primary);
+        }
+        
+        .code-block {
+            background: rgba(10, 14, 39, 0.8);
+            padding: 1.5rem;
+            border-radius: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--secondary-color);
+            overflow-x: auto;
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            position: relative;
+            backdrop-filter: blur(10px);
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .copy-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: rgba(0, 212, 255, 0.1);
+            color: var(--primary-color);
+            border: 1px solid var(--primary-color);
+            padding: 0.6rem 1.2rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(5px);
+        }
+        
+        .copy-btn:hover {
+            background: var(--primary-color);
+            color: var(--darker-bg);
+            box-shadow: 0 0 20px var(--glow-primary);
+            transform: translateY(-2px);
+        }
+        
+        /* Comparison Section */
+        .comparison {
+            padding: 6rem 0;
+            background: var(--darker-bg);
+        }
+        
+        .comparison-table {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 1.5rem;
+            overflow: hidden;
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        thead {
+            background: rgba(10, 14, 39, 0.8);
+        }
+        
+        th, td {
+            padding: 1.5rem 1.25rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+        }
+        
+        th {
+            font-weight: 600;
+            color: var(--primary-color);
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        tbody tr {
+            transition: all 0.3s ease;
+        }
+        
+        tbody tr:hover {
+            background: rgba(0, 212, 255, 0.05);
+        }
+        
+        tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .check {
+            color: var(--success);
+            font-size: 1.4rem;
+            filter: drop-shadow(0 0 5px var(--glow-secondary));
+        }
+        
+        .cross {
+            color: var(--error);
+            font-size: 1.4rem;
+            opacity: 0.5;
+        }
+        
+        /* Stats Section */
+        .stats {
+            padding: 6rem 0;
+            background: var(--dark-bg);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        
+        .stat-card {
+            text-align: center;
+            padding: 3rem 2rem;
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 1.5rem;
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            backdrop-filter: blur(10px);
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at center, var(--glow-primary), transparent 70%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+        
+        .stat-card:hover::before {
+            opacity: 0.15;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-10px);
+            border-color: var(--primary-color);
+            box-shadow: 0 20px 60px rgba(0, 212, 255, 0.3);
+        }
+        
+        .stat-number {
+            font-size: 4rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color), var(--accent-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+            position: relative;
+            z-index: 1;
+            line-height: 1;
+        }
+        
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 1.15rem;
+            position: relative;
+            z-index: 1;
+            font-weight: 500;
+        }
+        
+        /* Footer */
+        .footer {
+            padding: 3rem 0;
+            background: var(--darker-bg);
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+        }
+        
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .footer-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: color 0.2s ease;
+        }
+        
+        .footer-link:hover {
+            color: var(--primary-color);
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 3rem;
+            }
+            
+            .hero .subtitle {
+                font-size: 1.3rem;
+            }
+            
+            .hero .tagline {
+                font-size: 1.1rem;
+            }
+            
+            .terminal-body {
+                font-size: 0.875rem;
+                padding: 1.5rem;
+            }
+            
+            .section-title {
+                font-size: 2.5rem;
+            }
+            
+            .section-subtitle {
+                font-size: 1.1rem;
+            }
+            
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .feature-card {
+                padding: 2rem;
+            }
+            
+            table {
+                font-size: 0.9rem;
+            }
+            
+            th, td {
+                padding: 1rem 0.75rem;
+            }
+            
+            .stat-number {
+                font-size: 3rem;
+            }
+        }
+        
+        /* Animations */
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-20px);
+            }
+        }
+        
+        .floating {
+            animation: float 4s ease-in-out infinite;
+        }
+        
+        /* Scroll animations */
+        .fade-in-up {
+            opacity: 0;
+            transform: translateY(50px);
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .fade-in-up.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        /* Glowing border animation */
+        @keyframes border-glow {
+            0%, 100% {
+                border-color: rgba(0, 212, 255, 0.3);
+                box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+            }
+            50% {
+                border-color: rgba(0, 255, 136, 0.5);
+                box-shadow: 0 0 40px rgba(0, 255, 136, 0.3);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="gradient-bg"></div>
+    <div id="particles-js"></div>
+    
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h1>C++ Shell</h1>
+                <p class="subtitle">A Modern Unix Shell with Advanced Features</p>
+                <p class="tagline">
+                    Built from scratch in C++17 with job control, syntax highlighting,<br>
+                    multi-level pipelines, and everything you need from a modern shell.
+                </p>
+                
+                <div class="cta-buttons">
+                    <a href="https://github.com/BhaskarKulshrestha/codecrafters-shell-cpp" class="btn btn-primary">
+                        <i class="fab fa-github"></i> View on GitHub
+                    </a>
+                    <a href="#installation" class="btn btn-secondary">
+                        <i class="fas fa-download"></i> Get Started
+                    </a>
+                </div>
+                
+                <div class="terminal-demo floating">
+                    <div class="terminal-header">
+                        <div class="terminal-button close"></div>
+                        <div class="terminal-button minimize"></div>
+                        <div class="terminal-button maximize"></div>
+                        <div class="terminal-title">cpp-shell</div>
+                    </div>
+                    <div class="terminal-body">
+                        <div class="terminal-line">
+                            <span class="prompt">$</span> <span class="command">cat README.md | grep features | wc -l</span>
+                        </div>
+                        <div class="terminal-line">
+                            <span class="output">15</span>
+                        </div>
+                        <div class="terminal-line">
+                            <span class="prompt">$</span> <span class="command">sleep 10 &</span>
+                        </div>
+                        <div class="terminal-line">
+                            <span class="output">[1] 12345</span>
+                        </div>
+                        <div class="terminal-line">
+                            <span class="prompt">$</span> <span class="command">jobs</span>
+                        </div>
+                        <div class="terminal-line">
+                            <span class="output">[1]  Running		sleep 10 &</span>
+                        </div>
+                        <div class="terminal-line">
+                            <span class="prompt">$</span> <span class="command">export MY_VAR=hello && echo $MY_VAR</span>
+                        </div>
+                        <div class="terminal-line">
+                            <span class="output">hello</span>
+                        </div>
+                        <div class="terminal-line">
+                            <span class="prompt">$</span> <span class="comment"># Syntax highlighting included! ✨</span><span class="cursor"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <div class="container">
+            <h2 class="section-title">Powerful Features</h2>
+            <p class="section-subtitle">Everything you need from a modern shell, built with C++17</p>
+            
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-terminal"></i>
+                    </div>
+                    <h3>Job Control</h3>
+                    <p>Full background job support with &, jobs, fg, and bg commands. Process group management and signal handling for Ctrl+C and Ctrl+Z.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-palette"></i>
+                    </div>
+                    <h3>Syntax Highlighting</h3>
+                    <p>Real-time color-coded commands, variables, flags, and operators. Makes your command line beautiful and easier to read.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-code-branch"></i>
+                    </div>
+                    <h3>Multi-Level Pipelines</h3>
+                    <p>Chain unlimited commands with pipes. Full support for complex pipelines like cmd1 | cmd2 | cmd3 | cmd4.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-bolt"></i>
+                    </div>
+                    <h3>Command Chaining</h3>
+                    <p>Logical operators (&&, ||, ;) for conditional execution. Build complex command sequences with ease.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-file-import"></i>
+                    </div>
+                    <h3>I/O Redirection</h3>
+                    <p>Redirect stdout and stderr with >, >>, 2>, and 2>>. Full support for file operations and stream manipulation.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-dollar-sign"></i>
+                    </div>
+                    <h3>Variable Expansion</h3>
+                    <p>Shell variables with $VAR syntax, environment variables, and special variables like $? and $$.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-star"></i>
+                    </div>
+                    <h3>Wildcard Support</h3>
+                    <p>Pattern matching with * and ? for file operations. Glob expansion for efficient file manipulation.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-quote-right"></i>
+                    </div>
+                    <h3>Quote Handling</h3>
+                    <p>Full support for single and double quotes with proper escaping. Handle complex string arguments effortlessly.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-history"></i>
+                    </div>
+                    <h3>History & Completion</h3>
+                    <p>Command history with readline support. Tab completion for commands, powered by GNU readline library.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-bookmark"></i>
+                    </div>
+                    <h3>Directory Bookmarks</h3>
+                    <p>Save and jump to frequently used directories with bookmark and jump commands. Never type long paths again.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fab fa-git-alt"></i>
+                    </div>
+                    <h3>Git Integration</h3>
+                    <p>Built-in git-status and git-branch commands. See your repository status directly in the shell.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-calculator"></i>
+                    </div>
+                    <h3>Built-in Calculator</h3>
+                    <p>Evaluate mathematical expressions with the calc command. Supports basic arithmetic operations.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Installation Section -->
+    <section class="installation" id="installation">
+        <div class="container">
+            <h2 class="section-title">Quick Installation</h2>
+            <p class="section-subtitle">Get up and running in less than a minute</p>
+            
+            <div class="install-steps">
+                <div class="install-step">
+                    <h3>
+                        <span class="step-number">1</span>
+                        Clone the Repository
+                    </h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        <code>git clone https://github.com/BhaskarKulshrestha/codecrafters-shell-cpp.git
+cd codecrafters-shell-cpp</code>
+                    </div>
+                </div>
+                
+                <div class="install-step">
+                    <h3>
+                        <span class="step-number">2</span>
+                        Install Dependencies
+                    </h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        <code># macOS
+brew install readline
+
+# Ubuntu/Debian
+sudo apt-get install libreadline-dev
+
+# Fedora/RHEL
+sudo dnf install readline-devel</code>
+                    </div>
+                </div>
+                
+                <div class="install-step">
+                    <h3>
+                        <span class="step-number">3</span>
+                        Build the Shell
+                    </h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        <code>g++ -std=c++17 src/main.cpp -o src/main -lreadline</code>
+                    </div>
+                </div>
+                
+                <div class="install-step">
+                    <h3>
+                        <span class="step-number">4</span>
+                        Run the Shell
+                    </h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        <code>./src/main</code>
+                    </div>
+                </div>
+                
+                <div class="install-step">
+                    <h3>
+                        <span class="step-number">5</span>
+                        Optional: Install System-Wide
+                    </h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                        <code>sudo ./install.sh</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Comparison Section -->
+    <section class="comparison" id="comparison">
+        <div class="container">
+            <h2 class="section-title">How Does It Compare?</h2>
+            <p class="section-subtitle">Feature comparison with popular shells</p>
+            
+            <div class="comparison-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Feature</th>
+                            <th>C++ Shell</th>
+                            <th>bash</th>
+                            <th>zsh</th>
+                            <th>fish</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Basic Commands</td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-check check"></i></td>
+                        </tr>
+                        <tr>
+                            <td>Job Control</td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-check check"></i></td>
+                        </tr>
+                        <tr>
+                            <td>Syntax Highlighting</td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-times cross"></i></td>
+                            <td><i class="fas fa-times cross"></i></td>
+                            <td><i class="fas fa-check check"></i></td>
+                        </tr>
+                        <tr>
+                            <td>Multi-Level Pipelines</td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-check check"></i></td>
+                        </tr>
+                        <tr>
+                            <td>Command Chaining (&&, ||)</td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-check check"></i></td>
+                        </tr>
+                        <tr>
+                            <td>I/O Redirection</td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-check check"></i></td>
+                        </tr>
+                        <tr>
+                            <td>History & Tab Completion</td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-check check"></i></td>
+                        </tr>
+                        <tr>
+                            <td>Directory Bookmarks</td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-times cross"></i></td>
+                            <td><i class="fas fa-times cross"></i></td>
+                            <td><i class="fas fa-times cross"></i></td>
+                        </tr>
+                        <tr>
+                            <td>Built-in Calculator</td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-times cross"></i></td>
+                            <td><i class="fas fa-times cross"></i></td>
+                            <td><i class="fas fa-times cross"></i></td>
+                        </tr>
+                        <tr>
+                            <td>Git Integration</td>
+                            <td><i class="fas fa-check check"></i></td>
+                            <td><i class="fas fa-times cross"></i></td>
+                            <td><i class="fas fa-times cross"></i></td>
+                            <td><i class="fas fa-times cross"></i></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats" id="stats">
+        <div class="container">
+            <h2 class="section-title">By the Numbers</h2>
+            <p class="section-subtitle">Project statistics and achievements</p>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number">2,280</div>
+                    <div class="stat-label">Lines of Code</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-number">15+</div>
+                    <div class="stat-label">Builtin Commands</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-number">C++17</div>
+                    <div class="stat-label">Modern C++ Standard</div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-number">100%</div>
+                    <div class="stat-label">Open Source</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-links">
+                <a href="https://github.com/BhaskarKulshrestha/codecrafters-shell-cpp" class="footer-link">
+                    <i class="fab fa-github"></i> GitHub
+                </a>
+                <a href="https://github.com/BhaskarKulshrestha/codecrafters-shell-cpp/blob/master/README.md" class="footer-link">
+                    <i class="fas fa-book"></i> Documentation
+                </a>
+                <a href="https://github.com/BhaskarKulshrestha/codecrafters-shell-cpp/issues" class="footer-link">
+                    <i class="fas fa-bug"></i> Report Issues
+                </a>
+                <a href="https://github.com/BhaskarKulshrestha" class="footer-link">
+                    <i class="fas fa-user"></i> Author
+                </a>
+            </div>
+            <p style="color: var(--text-secondary);">
+                Built with ❤️ by Bhaskar Kulshrestha | Licensed under MIT
+            </p>
+        </div>
+    </footer>
+
+    <!-- Particles.js -->
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    
+    <script>
+        // Initialize particles.js
+        particlesJS('particles-js', {
+            particles: {
+                number: { value: 80, density: { enable: true, value_area: 800 } },
+                color: { value: '#00d4ff' },
+                shape: { type: 'circle' },
+                opacity: {
+                    value: 0.3,
+                    random: true,
+                    anim: { enable: true, speed: 1, opacity_min: 0.1, sync: false }
+                },
+                size: {
+                    value: 3,
+                    random: true,
+                    anim: { enable: true, speed: 2, size_min: 0.1, sync: false }
+                },
+                line_linked: {
+                    enable: true,
+                    distance: 150,
+                    color: '#00d4ff',
+                    opacity: 0.2,
+                    width: 1
+                },
+                move: {
+                    enable: true,
+                    speed: 1,
+                    direction: 'none',
+                    random: true,
+                    straight: false,
+                    out_mode: 'out',
+                    bounce: false
+                }
+            },
+            interactivity: {
+                detect_on: 'canvas',
+                events: {
+                    onhover: { enable: true, mode: 'grab' },
+                    onclick: { enable: true, mode: 'push' },
+                    resize: true
+                },
+                modes: {
+                    grab: { distance: 140, line_linked: { opacity: 0.5 } },
+                    push: { particles_nb: 4 }
+                }
+            },
+            retina_detect: true
+        });
+        
+        function copyCode(button) {
+            const codeBlock = button.parentElement;
+            const code = codeBlock.querySelector('code').textContent;
+            
+            navigator.clipboard.writeText(code).then(() => {
+                const originalText = button.textContent;
+                button.textContent = '✓ Copied!';
+                button.style.background = 'var(--success)';
+                button.style.color = 'var(--darker-bg)';
+                button.style.borderColor = 'var(--success)';
+                
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.background = 'rgba(0, 212, 255, 0.1)';
+                    button.style.color = 'var(--primary-color)';
+                    button.style.borderColor = 'var(--primary-color)';
+                }, 2000);
+            });
+        }
+        
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+        
+        // Enhanced scroll animations with Intersection Observer
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -80px 0px'
+        };
+        
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, observerOptions);
+        
+        // Apply fade-in-up to elements
+        document.querySelectorAll('.feature-card, .install-step, .stat-card').forEach(el => {
+            el.classList.add('fade-in-up');
+            observer.observe(el);
+        });
+        
+        // Add staggered animation delay to feature cards
+        document.querySelectorAll('.feature-card').forEach((card, index) => {
+            card.style.transitionDelay = `${index * 0.1}s`;
+        });
+        
+        // Parallax effect on scroll
+        let lastScrollY = window.scrollY;
+        window.addEventListener('scroll', () => {
+            const scrollY = window.scrollY;
+            const gradientBg = document.querySelector('.gradient-bg');
+            if (gradientBg) {
+                gradientBg.style.transform = `translateY(${scrollY * 0.5}px)`;
+            }
+            lastScrollY = scrollY;
+        });
+        
+        // Add typing effect to terminal (optional enhancement)
+        const terminalLines = document.querySelectorAll('.terminal-line');
+        terminalLines.forEach((line, index) => {
+            line.style.animationDelay = `${index * 0.3 + 0.5}s`;
+        });
+    </script>
+</body>
+</html>
