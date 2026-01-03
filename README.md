@@ -1,181 +1,506 @@
 [![progress-banner](https://backend.codecrafters.io/progress/shell/5900e925-82aa-4e9e-ac70-4ca52a9503c1)](https://app.codecrafters.io/users/codecrafters-bot?r=2qF)
 
-# Advanced Unix Shell in C++
+# Build Your Own Shell - C++ Implementation
 
-A feature-rich, POSIX-compliant Unix shell built in C++ for the [CodeCrafters Shell Challenge](https://app.codecrafters.io/courses/shell/overview). This shell goes beyond basic requirements with modern features like git integration, directory bookmarks, and a built-in calculator.
+A feature-rich, POSIX-compliant Unix shell built in C++ for the [CodeCrafters Shell Challenge](https://app.codecrafters.io/courses/shell/overview).
 
-## ✨ Features
+An advanced interactive shell that supports command execution, builtin commands, I/O redirection, pipelines, command history, tab completion, git integration, directory bookmarks, and a built-in calculator.
 
-### Core Shell Features
-- ✅ Interactive REPL with readline
-- ✅ Tab completion (builtins + PATH executables)
-- ✅ Persistent command history (HISTFILE support)
-- ✅ Built-in commands: `echo`, `exit`, `type`, `pwd`, `cd`, `history`
-- ✅ External program execution with PATH searching
-- ✅ Environment variables (`$VAR`, `${VAR}`, `$?`, `$$`)
-- ✅ `export`, `unset`, `env` builtins
+> 🐍 **Also Available**: [Python Implementation](https://github.com/BhaskarKulshrestha/codecrafters-shell-python) with all core features!
 
-### Advanced Features 🚀
-- ✅ **Git Integration**: `git-status`, `git-branch` for quick repo management
-- ✅ **Directory Bookmarks**: `bookmark`, `jump` for fast navigation
-- ✅ **Built-in Calculator**: `calc` for mathematical expressions
-- ✅ **Colorized Output**: ANSI colors for better UX
-- ✅ Quote handling (`'`, `"`, `\`)
-- ✅ Redirections: `>`, `>>`, `2>`
-- ✅ Pipelines: `|` (supports builtins!)
-- ✅ Command chaining: `&&`, `||`, `;`
-- ✅ Wildcard expansion: `*`, `?`
+## Features
 
-## 🚀 Quick Start
+### 🚀 Core Functionality
+- **REPL (Read-Eval-Print Loop)** - Interactive command-line interface with readline
+- **Command Execution** - Run external programs from PATH
+- **Builtin Commands** - Native shell commands (exit, echo, type, pwd, cd, history, export, unset, env)
+- **Quote Handling** - Proper parsing of single and double quotes with backslash escaping
+- **Environment Variables** - Full support for `$VAR`, `${VAR}`, `$?`, `$$`
+- **Error Handling** - Graceful handling of invalid commands with proper exit codes
 
-### Running the Shell
+### 📂 I/O Redirection
+- **Stdout Redirection** - `>` and `1>` (overwrite), `>>` and `1>>` (append)
+- **Stderr Redirection** - `2>` (overwrite), `2>>` (append)
+- **Combined Redirection** - Redirect stdout and stderr simultaneously
+- **Works with both builtins and external commands**
+
+### 🔗 Pipeline Support
+- **Multi-command Pipelines** - Chain unlimited commands with `|`
+- **Mixed Command Types** - Seamlessly pipe between builtins and external programs
+- **Example**: `cat file.txt | grep pattern | sort | uniq | wc -l`
+- **Builtin-aware** - Even builtins like `pwd` work in pipelines!
+
+### 📜 Command History
+- **Persistent History** - Commands saved to file (respects `$HISTFILE`)
+- **History Navigation** - Up/Down arrow keys to browse command history
+- **History Builtin** - View and manage command history
+  - `history` - Display all history
+  - `history N` - Display last N entries
+  - `history -r <file>` - Read history from file
+  - `history -w <file>` - Write history to file
+  - `history -a <file>` - Append new commands to file
+- **Cross-platform** - Custom implementation for macOS compatibility
+
+### ⌨️ Tab Completion
+- **Command Completion** - Auto-complete builtin and external commands
+- **Smart Suggestions** - Shows multiple matches when ambiguous
+- **Path-aware** - Completes from all directories in `$PATH`
+
+### 🎨 Advanced Features
+- **Git Integration** - `git-status` and `git-branch` commands for quick repo management
+- **Directory Bookmarks** - Save and jump to frequently used directories with `bookmark` and `jump`
+- **Built-in Calculator** - `calc` command for mathematical expressions (uses `bc`)
+- **Colorized Output** - ANSI color codes for better UX (green, red, yellow, cyan)
+- **Command Chaining** - `&&` (AND), `||` (OR), `;` (sequential execution)
+- **Wildcard Expansion** - `*` (any chars), `?` (single char) using `glob()`
+
+## Builtin Commands
+
+| Command | Description | Examples |
+|---------|-------------|----------|
+| `exit [code]` | Exit the shell with optional exit code | `exit`, `exit 0`, `exit $?` |
+| `echo <args>` | Print arguments to stdout | `echo hello world`, `echo $HOME` |
+| `type <cmd>` | Show if command is builtin or external | `type echo`, `type ls` |
+| `pwd` | Print current working directory | `pwd` |
+| `cd [dir]` | Change directory | `cd /tmp`, `cd ~`, `cd ..` |
+| `history [N]` | Display command history | `history`, `history 10` |
+| `history -r <file>` | Read history from file | `history -r ~/.bash_history` |
+| `history -w <file>` | Write history to file | `history -w /tmp/hist` |
+| `history -a <file>` | Append new history to file | `history -a /tmp/hist` |
+| `export VAR=val` | Set environment variable | `export PATH=$PATH:/new` |
+| `unset VAR` | Remove environment variable | `unset MY_VAR` |
+| `env` | Display all environment variables | `env` |
+| `calc <expr>` | Evaluate mathematical expression | `calc 2 + 2`, `calc sqrt(16)` |
+| `bookmark [name]` | Save/list/remove directory bookmarks | `bookmark mydir`, `bookmark rm mydir` |
+| `jump <name>` | Navigate to bookmarked directory | `jump mydir` |
+| `git-status` | Show current git branch and status | `git-status` |
+| `git-branch [name]` | List or switch git branches | `git-branch`, `git-branch develop` |
+
+## Usage Examples
+
+### Basic Commands
 ```bash
-cd src
-g++ -std=c++17 main.cpp -o main -lreadline
-./main
-```
+$ echo Hello, World!
+Hello, World!
 
-Or use the convenience script:
-```bash
-./run.sh
-```
+$ pwd
+/home/user
 
-### System-Wide Installation
-```bash
-./install.sh
-```
-Installs to `~/bin/myshell` and adds to PATH.
+$ cd /tmp
+$ pwd
+/tmp
 
-## 📖 Usage Examples
+$ export MY_VAR="test"
+$ echo $MY_VAR
+test
+```
 
 ### Calculator
 ```bash
 $ calc 2 + 2
 4
+
 $ calc sqrt(16)
 4
+
 $ calc (3 + 5) * 2
 16
+
+$ calc 2^10
+1024
 ```
 
 ### Directory Bookmarks
 ```bash
-$ bookmark myproject          # Save current directory
+$ cd ~/projects/myapp
+$ bookmark app
+Bookmarked: app -> /home/user/projects/myapp
+
 $ cd /tmp
-$ jump myproject              # Jump back instantly
-$ bookmark                    # List all bookmarks
-$ bookmark rm myproject       # Remove bookmark
+$ jump app
+Jumped to: /home/user/projects/myapp
+
+$ bookmark
+Bookmarks:
+  app -> /home/user/projects/myapp
+
+$ bookmark rm app
+Removed bookmark: app
 ```
 
 ### Git Integration
 ```bash
-$ git-status                  # Show branch and status
+$ git-status
 Branch: main [clean]
 
-$ git-branch                  # List branches
+$ git-branch
 * main
   develop
+  feature/new
 
-$ git-branch develop          # Switch branch
+$ git-branch develop
+Switched to branch 'develop'
 ```
 
-### Command Chaining
+### I/O Redirection
 ```bash
-$ calc 10 + 5 && echo "Success!"
-15
-Success!
+# Redirect stdout
+$ echo hello > output.txt
+$ cat output.txt
+hello
 
-$ cd /nonexistent || echo "Failed to cd"
-cd: /nonexistent: No such file or directory
-Failed to cd
+# Redirect stderr
+$ ls nonexistent 2> errors.txt
+
+# Append output
+$ echo world >> output.txt
+$ cat output.txt
+hello
+world
+
+# Redirect both
+$ command > stdout.txt 2> stderr.txt
 ```
 
 ### Pipelines
 ```bash
-$ echo "Hello World" | grep World
-Hello World
+# Simple pipeline
+$ echo "test data" | cat
+test data
 
-$ ls | grep .cpp
-main.cpp
+# Multi-stage pipeline
+$ ls | grep .cpp | wc -l
+5
+
+# Complex data processing
+$ cat data.txt | grep pattern | sort | uniq | wc -l
+42
+
+# Builtin in pipeline
+$ pwd | cat
+/home/user/projects
 ```
 
-## 📚 Documentation
+### Command Chaining
+```bash
+# AND - run if previous succeeds
+$ mkdir test && cd test && pwd
+/tmp/test
 
-- **[USAGE.md](USAGE.md)**: Complete usage guide with examples
-- **[TEST_FEATURES.md](TEST_FEATURES.md)**: Feature testing guide
-- **[CHANGELOG.md](CHANGELOG.md)**: Version history and updates
+# OR - run if previous fails
+$ cd /nonexistent || echo "Failed to cd"
+cd: /nonexistent: No such file or directory
+Failed to cd
 
-## 🔧 Technical Details
+# Sequential - run regardless
+$ echo "First" ; echo "Second" ; echo "Third"
+First
+Second
+Third
+```
 
-- **Language**: C++17
-- **Dependencies**: readline library, git, bc
-- **Lines of Code**: ~1770 lines (single file)
-- **Architecture**: STL-based, beginner-friendly code
+### Wildcards
+```bash
+$ ls *.cpp
+main.cpp helper.cpp
 
-### Data Persistence
-- History: `$HISTFILE` (default: `~/.bash_history`)
-- Bookmarks: `~/.myshell_bookmarks`
+$ echo test*
+test1.txt test2.txt test_data.log
 
-## 🎯 CodeCrafters Stages
+$ ls file?.txt
+file1.txt file2.txt fileA.txt
+```
 
-All stages completed:
-1. ✅ Print prompt
-2. ✅ Handle missing commands
-3. ✅ REPL loop
-4. ✅ `exit` builtin
-5. ✅ `echo` builtin
-6. ✅ `type` builtin
-7. ✅ Execute programs (PATH search)
-8. ✅ `pwd` builtin
-9. ✅ `cd` builtin
-10. ✅ `cd` to home directory
-11. ✅ Output redirection
-12. ✅ Redirection append mode
-13. ✅ Pipelines
-14. ✅ Error redirection
-15. ✅ Multiple redirections
-16. ✅ Builtin commands in pipelines
-17. ✅ Command history
+### Tab Completion
+```bash
+$ ec<TAB>
+$ echo   # Auto-completed
 
-Plus many additional features!
+$ e<TAB><TAB>
+echo  exit  env  export  # Shows all matching commands
 
-## 🎨 What Makes This Shell Special
+$ ca<TAB>
+$ calc   # Completes builtin
+```
 
-### Compared to bash/zsh:
+### Command History
+```bash
+$ echo first
+$ echo second
+$ history
+    1  echo first
+    2  echo second
+    3  history
+
+# Use Up/Down arrows to navigate
+$ <UP>    # Recalls: history
+$ <UP>    # Recalls: echo second
+$ <DOWN>  # Recalls: history
+
+# Save history
+$ history -w /tmp/my_history
+$ history -a /tmp/my_history  # Append only new commands
+```
+
+## Getting Started
+
+### Prerequisites
+- **C++ Compiler**: g++ with C++17 support (or clang++)
+- **readline Library**: For command-line editing and history
+  ```bash
+  # macOS
+  brew install readline
+  
+  # Ubuntu/Debian
+  sudo apt-get install libreadline-dev
+  
+  # Fedora/RHEL
+  sudo dnf install readline-devel
+  ```
+- **Optional**: git (for git-status/git-branch), bc (for calc)
+- **Unix-like Environment**: Linux, macOS, or WSL
+
+### Installation
+
+1. **Clone the repository:**
+```bash
+git clone https://github.com/BhaskarKulshrestha/codecrafters-shell-cpp.git
+cd codecrafters-shell-cpp
+```
+
+2. **Quick run (no installation):**
+```bash
+./run.sh          # Normal launch
+./run.sh demo     # Launch with feature overview
+```
+
+3. **System-wide installation:**
+```bash
+./install.sh
+```
+This will:
+- Compile the shell
+- Install to `~/bin/myshell`
+- Add `~/bin` to your PATH
+- Create launcher scripts
+
+After installation, run from anywhere:
+```bash
+myshell  # or mysh
+```
+
+4. **Uninstall:**
+```bash
+./uninstall.sh
+```
+
+### Configuration
+
+Set the `HISTFILE` environment variable to customize history file location:
+```bash
+export HISTFILE=~/.myshell_history
+./run.sh
+```
+
+Bookmarks are automatically saved to `~/.myshell_bookmarks`
+
+## Implementation Details
+
+### Architecture
+- **Single-file Design** - All code in `src/main.cpp` (~1770 lines)
+- **STL-based** - Uses modern C++ containers (vector, string, unordered_map, pair)
+- **Modular Functions** - Separate functions for parsing, execution, and I/O
+- **Readline Integration** - Native readline for history and tab completion
+- **Process Management** - Proper subprocess handling with fork/exec and pipes
+
+### Key Components
+- **`parse_command_line()`** - Handles quotes, escapes, and tokenization
+- **`expand_variables()`** - Expands `$VAR`, `${VAR}`, `$?`, `$$`
+- **`expand_wildcards()`** - Glob-based wildcard expansion
+- **`split_by_logical_operators()`** - Parses `&&`, `||`, `;`
+- **`execute_pipeline()`** - Chains multiple commands with proper I/O
+- **`execute_builtin_in_pipeline()`** - Handles builtins in pipe contexts
+- **`command_completion()`** - Tab completion for commands
+- **`custom_read_history()`/`custom_append_history()`** - macOS-compatible history
+
+### File Structure
+```
+.
+├── src/
+│   ├── main.cpp              # Main shell implementation (~1770 lines)
+│   ├── main                  # Compiled binary
+│   └── TEST_FEATURES.md      # Feature testing guide
+├── install.sh                # System-wide installation script
+├── run.sh                    # Quick launcher with demo mode
+├── uninstall.sh              # Removal script
+├── USAGE.md                  # Comprehensive usage guide
+├── CHANGELOG.md              # Version history
+├── README.md                 # This file
+├── codecrafters.yml          # CodeCrafters configuration
+└── your_program.sh           # CodeCrafters entry point
+```
+
+## Development
+
+### Compiling Manually
+```bash
+cd src
+g++ -std=c++17 main.cpp -o main -lreadline
+
+# If readline is in custom location (e.g., macOS Homebrew)
+g++ -std=c++17 main.cpp -o main -lreadline -I/opt/homebrew/include -L/opt/homebrew/lib
+```
+
+### Running Tests
+```bash
+codecrafters test
+```
+
+### Submitting to CodeCrafters
+```bash
+git add .
+git commit -m "feat: implement feature"
+git push origin master
+```
+
+## Features Checklist
+
+### CodeCrafters Stages
+- [x] REPL with prompt
+- [x] Handle missing commands
+- [x] External program execution
+- [x] Builtin commands (exit, echo, type, pwd, cd)
+- [x] PATH resolution
+- [x] Quote handling (single and double quotes)
+- [x] I/O redirection (>, >>, 2>, 2>>)
+- [x] Multiple redirections
+- [x] Pipelines (multiple commands)
+- [x] Builtin commands in pipelines
+- [x] Command history (persistent with HISTFILE)
+
+### Advanced Features
+- [x] Environment variables ($VAR, ${VAR}, $?, $$)
+- [x] Export/unset/env builtins
+- [x] Tab completion (builtins + PATH)
+- [x] Command chaining (&&, ||, ;)
+- [x] Wildcard expansion (*, ?)
+- [x] Git integration (git-status, git-branch)
+- [x] Directory bookmarks (bookmark, jump)
+- [x] Built-in calculator (calc)
+- [x] Colorized output (ANSI colors)
+- [x] History management (-r, -w, -a flags)
+- [x] Backslash escaping
+- [x] Exit status tracking
+
+### Planned Features
+- [ ] Background jobs (&, fg, bg)
+- [ ] Signal handling (SIGINT, SIGTSTP)
+- [ ] Command substitution ($(...))
+- [ ] Heredocs (<<)
+- [ ] Syntax highlighting
+- [ ] Inline suggestions
+- [ ] Configuration file (~/.myshellrc)
+
+## Technical Highlights
+
+### Cross-Platform Compatibility
+- Custom history functions for macOS libedit compatibility
+- OS-agnostic path handling with PATH parsing
+- Works on Linux, macOS, and WSL
+
+### Smart Command Execution
+- Tracks exit status for all commands ($?)
+- Proper pipe cleanup and error handling
+- Fork/exec for external programs
+- Direct execution for builtins (faster)
+
+### Robust Pipeline Implementation
+- Handles any combination of builtins and external commands
+- Proper file descriptor management
+- Process cleanup on errors
+- String buffering for builtin output in pipes
+
+### Color System
+```cpp
+#define COLOR_RESET   "\033[0m"
+#define COLOR_RED     "\033[31m"
+#define COLOR_GREEN   "\033[32m"
+#define COLOR_YELLOW  "\033[33m"
+#define COLOR_CYAN    "\033[36m"
+```
+
+## Comparison: This Shell vs Others
+
+| Feature | This Shell | bash | zsh | fish |
+|---------|-----------|------|-----|------|
+| Built-in Calculator | ✅ | ❌ | ❌ | ❌ |
+| Directory Bookmarks | ✅ | ❌ | ❌ | ❌ |
+| Git Integration | ✅ | ❌ | ❌ | ❌ |
+| Command History | ✅ | ✅ | ✅ | ✅ |
+| Tab Completion | ✅ | ✅ | ✅ | ✅ |
+| Pipelines | ✅ | ✅ | ✅ | ✅ |
+| Colorized Output | ✅ | ❌ | ❌ | ✅ |
+| Job Control | ❌ | ✅ | ✅ | ✅ |
+| Syntax Highlighting | ❌ | ❌ | ❌ | ✅ |
+
+### What Makes This Shell Special
 - **Built-in calculator** - No need for external `bc` or `expr` commands
-- **Directory bookmarks** - Faster than creating aliases
+- **Directory bookmarks** - Faster navigation than creating aliases
 - **Git integration** - Quick status checks without typing full commands
-- **Colorized output** - Enhanced readability
-- **Beginner-friendly code** - Clean C++17 with STL, easy to understand
+- **Colorized output** - Enhanced readability for commands and errors
+- **Beginner-friendly code** - Clean C++17 with STL, easy to understand and extend
 
-## 🐛 Known Limitations
+## Troubleshooting
 
-- Syntax highlighting: Not yet implemented (as-you-type)
-- Job control: Background processes (`&`) not supported yet
-- Configuration file: No `~/.myshellrc` support yet
+### Compilation Issues
+```bash
+# If readline is not found
+brew install readline  # macOS
+sudo apt-get install libreadline-dev  # Ubuntu
 
-## 📝 CodeCrafters Original Info
+# Link against homebrew readline
+g++ -std=c++17 main.cpp -o main -lreadline \
+    -I/opt/homebrew/include -L/opt/homebrew/lib
+```
 
-This is a starting point for C++ solutions to the
-["Build Your Own Shell" Challenge](https://app.codecrafters.io/courses/shell/overview).
+### Missing bc command
+```bash
+# macOS
+brew install bc
 
-In this challenge, you'll build your own POSIX compliant shell that's capable of
-interpreting shell commands, running external programs and builtin commands like
-cd, pwd, echo and more.
+# Ubuntu
+sudo apt-get install bc
+```
 
-**Note**: If you're viewing this repo on GitHub, head over to
-[codecrafters.io](https://codecrafters.io) to try the challenge.
+## Documentation
 
-## 📦 Repository
+- **[USAGE.md](USAGE.md)** - Complete usage guide with all commands and examples
+- **[TEST_FEATURES.md](src/TEST_FEATURES.md)** - Comprehensive feature testing
+- **[CHANGELOG.md](CHANGELOG.md)** - Version history and updates
 
-- **Personal GitHub**: https://github.com/BhaskarKulshrestha/codecrafters-shell-cpp.git
+## Acknowledgments
+
+This project is part of the [CodeCrafters](https://codecrafters.io) "Build Your Own Shell" challenge.
+
+Special thanks to CodeCrafters for providing an excellent platform for learning systems programming.
+
+## Repository
+
+- **GitHub**: https://github.com/BhaskarKulshrestha/codecrafters-shell-cpp
 - **CodeCrafters**: https://git.codecrafters.io/114ce7b8708b4a39
 
-## 👤 Author
+## Author
 
-- Email: bhaskarkulshrestha03@gmail.com
-- GitHub: [@BhaskarKulshrestha](https://github.com/BhaskarKulshrestha)
+- **Name**: Bhaskar Kulshrestha
+- **Email**: bhaskarkulshrestha03@gmail.com
+- **GitHub**: [@BhaskarKulshrestha](https://github.com/BhaskarKulshrestha)
 
-## 📄 License
+## License
+
+MIT License - Feel free to use this code for learning purposes.
+
+---
+
+**Note**: If you're viewing this repo on GitHub, head over to [codecrafters.io](https://codecrafters.io) to try the challenge yourself!
 
 Built for educational purposes as part of the CodeCrafters challenge.
