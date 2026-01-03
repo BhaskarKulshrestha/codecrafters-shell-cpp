@@ -16,9 +16,32 @@
 #include <ctime>        // for timestamps
 #include <iomanip>      // for formatting
 #include <sys/stat.h>   // for stat
+#include <signal.h>     // for signal handling
+#include <termios.h>    // for terminal control
 #include <readline/readline.h>  // for readline, tab completion
 #include <readline/history.h>   // for history functions
 using namespace std;
+
+// Job status enum
+enum JobStatus {
+    RUNNING,
+    STOPPED,
+    DONE
+};
+
+// Job structure for job control
+struct Job {
+    int job_id;
+    pid_t pid;
+    string command;
+    JobStatus status;
+    bool is_background;
+};
+
+// Global variables for job control
+vector<Job> jobs;
+int next_job_id = 1;
+pid_t foreground_pgid = 0;
 
 // ANSI color codes
 #define COLOR_RESET   "\033[0m"
@@ -36,6 +59,155 @@ unordered_map<string, string> shell_variables;  // Shell-local variables
 unordered_map<string, string> bookmarks;        // Directory bookmarks
 int last_exit_status = 0;  // Last command exit status ($?)
 chrono::steady_clock::time_point cmd_start_time;  // For timing commands
+
+// Signal handler for SIGCHLD (child process state change)
+void sigchld_handler(int sig) {
+    int saved_errno = errno;
+    pid_t pid;
+    int status;
+    
+    // Reap all zombie processes
+    while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED)) > 0) {
+        // Find the job
+        for (auto& job : jobs) {
+            if (job.pid == pid) {
+                if (WIFEXITED(status) || WIFSIGNALED(status)) {
+                    job.status = DONE;
+                    if (job.is_background) {
+                        cout << "\n[" << job.job_id << "]+ Done\t\t" << job.command << endl;
+                    }
+                } else if (WIFSTOPPED(status)) {
+                    job.status = STOPPED;
+                    if (job.is_background) {
+                        cout << "\n[" << job.job_id << "]+ Stopped\t" << job.command << endl;
+                    }
+                } else if (WIFCONTINUED(status)) {
+                    job.status = RUNNING;
+                }
+                break;
+            }
+        }
+    }
+    
+    errno = saved_errno;
+}
+
+// Initialize signal handlers
+void setup_signals() {
+    struct sigaction sa;
+    sa.sa_handler = sigchld_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+    sigaction(SIGCHLD, &sa, nullptr);
+    
+    // Ignore SIGINT and SIGTSTP in shell (children will get them)
+    signal(SIGINT, SIG_IGN);
+    signal(SIGTSTP, SIG_IGN);
+}
+
+// Remove completed jobs from job list
+void cleanup_jobs() {
+    jobs.erase(remove_if(jobs.begin(), jobs.end(),
+        [](const Job& j) { return j.status == DONE; }), jobs.end());
+}
+
+// Add job to job list
+int add_job(pid_t pid, const string& command, bool is_background) {
+    cleanup_jobs();
+    Job job;
+    job.job_id = next_job_id++;
+    job.pid = pid;
+    job.command = command;
+    job.status = RUNNING;
+    job.is_background = is_background;
+    jobs.push_back(job);
+    return job.job_id;
+}
+
+// Find job by job ID
+Job* find_job_by_id(int job_id) {
+    for (auto& job : jobs) {
+        if (job.job_id == job_id) {
+            return &job;
+        }
+    }
+    return nullptr;
+}
+
+// Syntax highlighting for input (simple version)
+// Returns colored version of command for display
+string highlight_syntax(const string& line) {
+    if (line.empty()) return line;
+    
+    stringstream ss(line);
+    string token;
+    string result;
+    bool first = true;
+    
+    // Split by spaces and color accordingly
+    istringstream iss(line);
+    vector<string> tokens;
+    string word;
+    
+    while (iss >> word) {
+        tokens.push_back(word);
+    }
+    
+    if (tokens.empty()) return line;
+    
+    // Check if first token is a builtin or command
+    unordered_set<string> builtins = {
+        "exit", "echo", "type", "pwd", "cd", "export", "unset", "env",
+        "history", "calc", "bookmark", "jump", "git-status", "git-branch",
+        "jobs", "fg", "bg", "timer"
+    };
+    
+    for (size_t i = 0; i < tokens.size(); i++) {
+        if (i > 0) result += " ";
+        
+        string token = tokens[i];
+        
+        if (i == 0) {
+            // First token: command
+            if (builtins.count(token)) {
+                result += COLOR_GREEN + token + COLOR_RESET;
+            } else if (token[0] == '#') {
+                // Comment - rest of line
+                result += COLOR_GRAY;
+                for (size_t j = i; j < tokens.size(); j++) {
+                    if (j > i) result += " ";
+                    result += tokens[j];
+                }
+                result += COLOR_RESET;
+                break;
+            } else {
+                result += COLOR_CYAN + token + COLOR_RESET;
+            }
+        } else {
+            // Arguments
+            if (token[0] == '$') {
+                // Variable
+                result += COLOR_YELLOW + token + COLOR_RESET;
+            } else if (token[0] == '-') {
+                // Flag
+                result += COLOR_MAGENTA + token + COLOR_RESET;
+            } else if (token.find('=') != string::npos) {
+                // Assignment
+                result += COLOR_YELLOW + token + COLOR_RESET;
+            } else if (token == "|" || token == "&&" || token == "||" || token == ";") {
+                // Operators
+                result += COLOR_BOLD + token + COLOR_RESET;
+            } else if (token == ">" || token == ">>" || token == "2>" || token == "2>>") {
+                // Redirection
+                result += COLOR_MAGENTA + token + COLOR_RESET;
+            } else {
+                result += token;
+            }
+        }
+    }
+    
+    return result;
+}
 
 // Custom function to load history from a plain text file
 // Reads line by line and adds to history using add_history()
@@ -209,7 +381,8 @@ bool is_builtin(const string& command) {
     unordered_set<string> builtins = {
         "echo", "exit", "type", "pwd", "cd", "history", 
         "export", "unset", "env", "bookmark", "jump", 
-        "git-status", "git-branch", "calc", "timer"
+        "git-status", "git-branch", "calc", "timer",
+        "jobs", "fg", "bg"  // Job control commands
     };
     
     // Check if command exists in the set
@@ -714,6 +887,135 @@ bool execute_builtin_in_pipeline(const vector<string>& args, int& last_appended_
         cout << COLOR_YELLOW << "Use 'timer' before a command to time it" << COLOR_RESET << endl;
         cout << COLOR_GRAY << "Example: timer sleep 2" << COLOR_RESET << endl;
     }
+    else if (command == "jobs") {
+        // List all jobs
+        cleanup_jobs();
+        if (jobs.empty()) {
+            // No output if no jobs
+        } else {
+            for (const auto& job : jobs) {
+                string status_str;
+                switch (job.status) {
+                    case RUNNING:
+                        status_str = string(COLOR_GREEN) + "Running" + COLOR_RESET;
+                        break;
+                    case STOPPED:
+                        status_str = string(COLOR_YELLOW) + "Stopped" + COLOR_RESET;
+                        break;
+                    case DONE:
+                        status_str = string(COLOR_GRAY) + "Done" + COLOR_RESET;
+                        break;
+                }
+                cout << "[" << job.job_id << "]  " << status_str << "\t\t" << job.command << endl;
+            }
+        }
+    }
+    else if (command == "fg") {
+        // Bring job to foreground
+        if (jobs.empty()) {
+            cerr << "fg: no current job" << endl;
+            return true;
+        }
+        
+        Job* job = nullptr;
+        if (args.size() > 1) {
+            // Specific job ID
+            try {
+                int job_id = stoi(args[1]);
+                job = find_job_by_id(job_id);
+                if (!job) {
+                    cerr << "fg: " << job_id << ": no such job" << endl;
+                    return true;
+                }
+            } catch (...) {
+                cerr << "fg: invalid job id" << endl;
+                return true;
+            }
+        } else {
+            // Most recent job
+            job = &jobs.back();
+        }
+        
+        // Send SIGCONT to resume if stopped
+        kill(job->pid, SIGCONT);
+        job->status = RUNNING;
+        job->is_background = false;
+        
+        // Give terminal control to job
+        tcsetpgrp(STDIN_FILENO, job->pid);
+        foreground_pgid = job->pid;
+        
+        cout << job->command << endl;
+        
+        // Wait for job
+        int status;
+        pid_t pid = job->pid;
+        int job_id = job->job_id;
+        string cmd = job->command;
+        
+        waitpid(pid, &status, WUNTRACED);
+        
+        // Take back terminal control
+        tcsetpgrp(STDIN_FILENO, getpgrp());
+        foreground_pgid = 0;
+        
+        if (WIFEXITED(status) || WIFSIGNALED(status)) {
+            // Job completed
+            jobs.erase(remove_if(jobs.begin(), jobs.end(),
+                [pid](const Job& j) { return j.pid == pid; }), jobs.end());
+        } else if (WIFSTOPPED(status)) {
+            // Job stopped again
+            for (auto& j : jobs) {
+                if (j.pid == pid) {
+                    j.status = STOPPED;
+                    cout << "\n[" << job_id << "]+ Stopped\t" << cmd << endl;
+                    break;
+                }
+            }
+        }
+    }
+    else if (command == "bg") {
+        // Continue job in background
+        if (jobs.empty()) {
+            cerr << "bg: no current job" << endl;
+            return true;
+        }
+        
+        Job* job = nullptr;
+        if (args.size() > 1) {
+            // Specific job ID
+            try {
+                int job_id = stoi(args[1]);
+                job = find_job_by_id(job_id);
+                if (!job) {
+                    cerr << "bg: " << job_id << ": no such job" << endl;
+                    return true;
+                }
+            } catch (...) {
+                cerr << "bg: invalid job id" << endl;
+                return true;
+            }
+        } else {
+            // Most recent stopped job
+            for (auto it = jobs.rbegin(); it != jobs.rend(); ++it) {
+                if (it->status == STOPPED) {
+                    job = &(*it);
+                    break;
+                }
+            }
+            if (!job) {
+                cerr << "bg: no stopped jobs" << endl;
+                return true;
+            }
+        }
+        
+        // Send SIGCONT to resume
+        kill(job->pid, SIGCONT);
+        job->status = RUNNING;
+        job->is_background = true;
+        
+        cout << "[" << job->job_id << "]+ " << job->command << " &" << endl;
+    }
     
     return true;  // Was a builtin
 }
@@ -956,7 +1258,7 @@ void execute_pipeline(const vector<string>& cmd1_args, const vector<string>& cmd
 }
 
 // Execute an external program with arguments and optional output redirection
-void execute_program(const vector<string>& args, const string& stdout_file = "", bool stdout_append = false, const string& stderr_file = "", bool stderr_append = false) {
+void execute_program(const vector<string>& args, const string& stdout_file = "", bool stdout_append = false, const string& stderr_file = "", bool stderr_append = false, bool background = false) {
     if (args.empty()) return;
     
     string command = args[0];
@@ -990,6 +1292,17 @@ void execute_program(const vector<string>& args, const string& stdout_file = "",
     
     if (process_id == 0) {
         // This code runs in the CHILD process
+        
+        // Create new process group for job control
+        setpgid(0, 0);
+        
+        // If not background, give terminal control to child
+        if (!background) {
+            tcsetpgrp(STDIN_FILENO, getpid());
+            // Reset signal handlers
+            signal(SIGINT, SIG_DFL);
+            signal(SIGTSTP, SIG_DFL);
+        }
         
         // If stdout redirection is specified, redirect stdout to file
         if (!stdout_file.empty()) {
@@ -1038,15 +1351,48 @@ void execute_program(const vector<string>& args, const string& stdout_file = "",
     } 
     else {
         // This code runs in the PARENT process
-        // Wait for the child process to finish
-        int status;
-        waitpid(process_id, &status, 0);
+        setpgid(process_id, process_id);
         
-        // Update exit status
-        if (WIFEXITED(status)) {
-            last_exit_status = WEXITSTATUS(status);
+        if (background) {
+            // Background job - don't wait
+            string cmd_str;
+            for (const auto& arg : args) {
+                if (!cmd_str.empty()) cmd_str += " ";
+                cmd_str += arg;
+            }
+            int job_id = add_job(process_id, cmd_str, true);
+            cout << "[" << job_id << "] " << process_id << endl;
+            last_exit_status = 0;
         } else {
-            last_exit_status = 1;  // Abnormal termination
+            // Foreground job - wait for it
+            foreground_pgid = process_id;
+            tcsetpgrp(STDIN_FILENO, process_id);
+            
+            int status;
+            waitpid(process_id, &status, WUNTRACED);
+            
+            // Give terminal back to shell
+            tcsetpgrp(STDIN_FILENO, getpgrp());
+            foreground_pgid = 0;
+            
+            // Update exit status
+            if (WIFEXITED(status)) {
+                last_exit_status = WEXITSTATUS(status);
+            } else if (WIFSIGNALED(status)) {
+                last_exit_status = 128 + WTERMSIG(status);
+            } else if (WIFSTOPPED(status)) {
+                // Job was stopped (Ctrl+Z)
+                string cmd_str;
+                for (const auto& arg : args) {
+                    if (!cmd_str.empty()) cmd_str += " ";
+                    cmd_str += arg;
+                }
+                int job_id = add_job(process_id, cmd_str, false);
+                cout << "\n[" << job_id << "]+ Stopped\t" << cmd_str << endl;
+                last_exit_status = 0;
+            } else {
+                last_exit_status = 1;  // Abnormal termination
+            }
         }
     }
 }
@@ -1217,6 +1563,15 @@ int main() {
     cout << unitbuf;
     cerr << unitbuf;
     
+    // Setup signal handlers for job control
+    setup_signals();
+    
+    // Put shell in its own process group
+    setpgid(0, 0);
+    
+    // Take control of terminal
+    tcsetpgrp(STDIN_FILENO, getpgrp());
+    
     // Set up readline completion
     rl_attempted_completion_function = command_completion;
     
@@ -1352,12 +1707,19 @@ int main() {
             continue;
         }
         
-        // Check for output redirection (>, 1>, >>, 1>>) and error redirection (2>, 2>>)
+        // Check for output redirection (>, 1>, >>, 1>>), error redirection (2>, 2>>), and background (&)
         string stdout_file = "";
         bool stdout_append = false;
         string stderr_file = "";
         bool stderr_append = false;
+        bool background = false;
         vector<string> command_tokens;
+        
+        // Check for '&' at the end (background execution)
+        if (!tokens.empty() && tokens.back() == "&") {
+            background = true;
+            tokens.pop_back();  // Remove the '&'
+        }
         
         for (int i = 0; i < tokens.size(); i++) {
             // Check if token is >> or 1>> (stdout append)
@@ -1750,9 +2112,153 @@ int main() {
             cout << COLOR_YELLOW << "Timer: Use 'time <command>' to measure execution time" << COLOR_RESET << endl;
             last_exit_status = 0;
         }
+        else if (command == "jobs") {
+            // List all jobs
+            cleanup_jobs();
+            if (jobs.empty()) {
+                // No output if no jobs
+            } else {
+                for (const auto& job : jobs) {
+                    string status_str;
+                    switch (job.status) {
+                        case RUNNING:
+                            status_str = string(COLOR_GREEN) + "Running" + COLOR_RESET;
+                            break;
+                        case STOPPED:
+                            status_str = string(COLOR_YELLOW) + "Stopped" + COLOR_RESET;
+                            break;
+                        case DONE:
+                            status_str = string(COLOR_GRAY) + "Done" + COLOR_RESET;
+                            break;
+                    }
+                    cout << "[" << job.job_id << "]  " << status_str << "\t\t" << job.command << endl;
+                }
+            }
+            last_exit_status = 0;
+        }
+        else if (command == "fg") {
+            // Bring job to foreground
+            if (jobs.empty()) {
+                cerr << "fg: no current job" << endl;
+                last_exit_status = 1;
+                continue;
+            }
+            
+            Job* job = nullptr;
+            if (command_tokens.size() > 1) {
+                // Specific job ID
+                try {
+                    int job_id = stoi(command_tokens[1]);
+                    job = find_job_by_id(job_id);
+                    if (!job) {
+                        cerr << "fg: " << job_id << ": no such job" << endl;
+                        last_exit_status = 1;
+                        continue;
+                    }
+                } catch (...) {
+                    cerr << "fg: invalid job id" << endl;
+                    last_exit_status = 1;
+                    continue;
+                }
+            } else {
+                // Most recent job
+                job = &jobs.back();
+            }
+            
+            // Send SIGCONT to resume if stopped
+            kill(job->pid, SIGCONT);
+            job->status = RUNNING;
+            job->is_background = false;
+            
+            // Give terminal control to job
+            tcsetpgrp(STDIN_FILENO, job->pid);
+            foreground_pgid = job->pid;
+            
+            cout << job->command << endl;
+            
+            // Wait for job
+            int status;
+            pid_t pid = job->pid;
+            int job_id = job->job_id;
+            string cmd = job->command;
+            
+            waitpid(pid, &status, WUNTRACED);
+            
+            // Take back terminal control
+            tcsetpgrp(STDIN_FILENO, getpgrp());
+            foreground_pgid = 0;
+            
+            if (WIFEXITED(status) || WIFSIGNALED(status)) {
+                // Job completed
+                jobs.erase(remove_if(jobs.begin(), jobs.end(),
+                    [pid](const Job& j) { return j.pid == pid; }), jobs.end());
+                if (WIFEXITED(status)) {
+                    last_exit_status = WEXITSTATUS(status);
+                } else {
+                    last_exit_status = 128 + WTERMSIG(status);
+                }
+            } else if (WIFSTOPPED(status)) {
+                // Job stopped again
+                for (auto& j : jobs) {
+                    if (j.pid == pid) {
+                        j.status = STOPPED;
+                        cout << "\n[" << job_id << "]+ Stopped\t" << cmd << endl;
+                        break;
+                    }
+                }
+                last_exit_status = 0;
+            }
+        }
+        else if (command == "bg") {
+            // Continue job in background
+            if (jobs.empty()) {
+                cerr << "bg: no current job" << endl;
+                last_exit_status = 1;
+                continue;
+            }
+            
+            Job* job = nullptr;
+            if (command_tokens.size() > 1) {
+                // Specific job ID
+                try {
+                    int job_id = stoi(command_tokens[1]);
+                    job = find_job_by_id(job_id);
+                    if (!job) {
+                        cerr << "bg: " << job_id << ": no such job" << endl;
+                        last_exit_status = 1;
+                        continue;
+                    }
+                } catch (...) {
+                    cerr << "bg: invalid job id" << endl;
+                    last_exit_status = 1;
+                    continue;
+                }
+            } else {
+                // Most recent stopped job
+                for (auto it = jobs.rbegin(); it != jobs.rend(); ++it) {
+                    if (it->status == STOPPED) {
+                        job = &(*it);
+                        break;
+                    }
+                }
+                if (!job) {
+                    cerr << "bg: no stopped jobs" << endl;
+                    last_exit_status = 1;
+                    continue;
+                }
+            }
+            
+            // Send SIGCONT to resume
+            kill(job->pid, SIGCONT);
+            job->status = RUNNING;
+            job->is_background = true;
+            
+            cout << "[" << job->job_id << "]+ " << job->command << " &" << endl;
+            last_exit_status = 0;
+        }
         else {
             // Not a builtin, try to execute as external program
-            execute_program(command_tokens, stdout_file, stdout_append, stderr_file, stderr_append);
+            execute_program(command_tokens, stdout_file, stdout_append, stderr_file, stderr_append, background);
         }
         
         }  // End of command chain for loop

@@ -47,6 +47,9 @@ An advanced interactive shell that supports command execution, builtin commands,
 - **Path-aware** - Completes from all directories in `$PATH`
 
 ### 🎨 Advanced Features
+- **Job Control** - Background processes (`&`), `jobs` command, `fg`/`bg` for foreground/background control
+- **Syntax Highlighting** - Color-coded commands, builtins, variables, operators, and arguments
+- **Signal Handling** - Proper handling of SIGINT (Ctrl+C), SIGTSTP (Ctrl+Z), and SIGCHLD
 - **Git Integration** - `git-status` and `git-branch` commands for quick repo management
 - **Directory Bookmarks** - Save and jump to frequently used directories with `bookmark` and `jump`
 - **Built-in Calculator** - `calc` command for mathematical expressions (uses `bc`)
@@ -75,6 +78,9 @@ An advanced interactive shell that supports command execution, builtin commands,
 | `jump <name>` | Navigate to bookmarked directory | `jump mydir` |
 | `git-status` | Show current git branch and status | `git-status` |
 | `git-branch [name]` | List or switch git branches | `git-branch`, `git-branch develop` |
+| `jobs` | List all background and stopped jobs | `jobs` |
+| `fg [job_id]` | Bring job to foreground | `fg`, `fg 1` |
+| `bg [job_id]` | Continue job in background | `bg`, `bg 1` |
 
 ## Usage Examples
 
@@ -140,6 +146,40 @@ $ git-branch
 
 $ git-branch develop
 Switched to branch 'develop'
+```
+
+### Job Control
+```bash
+# Run process in background
+$ sleep 10 &
+[1] 12345
+
+# List jobs
+$ jobs
+[1]  Running		sleep 10 &
+
+# Suspend foreground job with Ctrl+Z
+$ sleep 30
+^Z
+[2]+ Stopped	sleep 30
+
+# List both jobs
+$ jobs
+[1]  Running		sleep 10 &
+[2]+ Stopped		sleep 30
+
+# Continue stopped job in background
+$ bg 2
+[2]+ sleep 30 &
+
+# Bring job to foreground
+$ fg 1
+sleep 10
+# (waits for completion)
+
+# Job control with pipelines
+$ cat large_file.txt | grep pattern | sort &
+[3] 12350
 ```
 
 ### I/O Redirection
@@ -391,15 +431,16 @@ git push origin master
 - [x] History management (-r, -w, -a flags)
 - [x] Backslash escaping
 - [x] Exit status tracking
+- [x] **Job control** (background jobs with &, fg, bg, jobs commands)
+- [x] **Signal handling** (SIGINT, SIGTSTP, SIGCHLD)
+- [x] **Syntax highlighting** (color-coded commands and operators)
 
 ### Planned Features
-- [ ] Background jobs (&, fg, bg)
-- [ ] Signal handling (SIGINT, SIGTSTP)
 - [ ] Command substitution ($(...))
 - [ ] Heredocs (<<)
-- [ ] Syntax highlighting
-- [ ] Inline suggestions
+- [ ] Inline command suggestions (ghost text)
 - [ ] Configuration file (~/.myshellrc)
+- [ ] Advanced completion (file paths, arguments)
 
 ## Technical Highlights
 
@@ -440,8 +481,8 @@ git push origin master
 | Tab Completion | ✅ | ✅ | ✅ | ✅ |
 | Pipelines | ✅ | ✅ | ✅ | ✅ |
 | Colorized Output | ✅ | ❌ | ❌ | ✅ |
-| Job Control | ❌ | ✅ | ✅ | ✅ |
-| Syntax Highlighting | ❌ | ❌ | ❌ | ✅ |
+| Job Control | ✅ | ✅ | ✅ | ✅ |
+| Syntax Highlighting | ✅ | ❌ | ❌ | ✅ |
 
 ### What Makes This Shell Special
 - **Built-in calculator** - No need for external `bc` or `expr` commands
