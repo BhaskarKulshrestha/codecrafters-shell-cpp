@@ -32,3 +32,9 @@ Note: This section is for stages 2 and beyond.
    `src/main.cpp`.
 1. Commit your changes and run `git push origin master` to submit your solution
    to CodeCrafters. Test output will be streamed to your terminal.
+
+
+## codecrafter github repo
+
+origin  https://git.codecrafters.io/114ce7b8708b4a39 (fetch)
+origin  https://git.codecrafters.io/114ce7b8708b4a39 (push)

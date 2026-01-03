@@ -3,16 +3,22 @@
 #include <sstream>
 #include <vector>
 #include <unordered_set>
-#include <cstdlib>      // for getenv
+#include <unordered_map>
+#include <cstdlib>      // for getenv, setenv
 #include <unistd.h>     // for access, fork, execvp
-#include <sys/wait.h>   // for waitpid
+#include <sys/wait.h>   // for waitpid, WIFEXITED, WEXITSTATUS
 #include <fcntl.h>      // for open, O_WRONLY, O_CREAT, O_TRUNC
 #include <dirent.h>     // for opendir, readdir, closedir
 #include <cstring>      // for strlen, strdup
 #include <fstream>      // for file operations
+#include <glob.h>       // for wildcard expansion
 #include <readline/readline.h>  // for readline, tab completion
 #include <readline/history.h>   // for history functions
 using namespace std;
+
+// Global variables for shell state
+unordered_map<string, string> shell_variables;  // Shell-local variables
+int last_exit_status = 0;  // Last command exit status ($?)
 
 // Custom function to load history from a plain text file
 // Reads line by line and adds to history using add_history()
@@ -61,10 +67,101 @@ int custom_append_history(int num_entries, const char* filename) {
 // Check if a command is a builtin command
 bool is_builtin(const string& command) {
     // Set of all builtin commands
-    unordered_set<string> builtins = {"echo", "exit", "type", "pwd", "cd", "history"};
+    unordered_set<string> builtins = {"echo", "exit", "type", "pwd", "cd", "history", "export", "unset", "env"};
     
     // Check if command exists in the set
     return builtins.count(command) > 0;
+}
+
+// Expand environment variables and shell variables in a string
+// Supports $VAR, ${VAR}, $?, $$
+string expand_variables(const string& str) {
+    string result = "";
+    int i = 0;
+    
+    while (i < str.length()) {
+        if (str[i] == '$') {
+            // Variable expansion
+            i++;  // Skip $
+            
+            if (i >= str.length()) {
+                result += '$';  // Lone $ at end
+                break;
+            }
+            
+            // Check for special variables
+            if (str[i] == '?') {
+                // Exit status
+                result += to_string(last_exit_status);
+                i++;
+                continue;
+            } else if (str[i] == '$') {
+                // Process ID
+                result += to_string(getpid());
+                i++;
+                continue;
+            } else if (str[i] == '{') {
+                // ${VAR} syntax
+                i++;  // Skip {
+                string var_name = "";
+                while (i < str.length() && str[i] != '}') {
+                    var_name += str[i];
+                    i++;
+                }
+                if (i < str.length()) i++;  // Skip }
+                
+                // Look up variable (shell var first, then env)
+                if (shell_variables.count(var_name)) {
+                    result += shell_variables[var_name];
+                } else {
+                    const char* env_val = getenv(var_name.c_str());
+                    if (env_val) result += env_val;
+                }
+            } else {
+                // $VAR syntax (alphanumeric and underscore)
+                string var_name = "";
+                while (i < str.length() && (isalnum(str[i]) || str[i] == '_')) {
+                    var_name += str[i];
+                    i++;
+                }
+                
+                // Look up variable
+                if (shell_variables.count(var_name)) {
+                    result += shell_variables[var_name];
+                } else {
+                    const char* env_val = getenv(var_name.c_str());
+                    if (env_val) result += env_val;
+                }
+            }
+        } else {
+            result += str[i];
+            i++;
+        }
+    }
+    
+    return result;
+}
+
+// Expand wildcards in a token using glob
+vector<string> expand_wildcards(const string& pattern) {
+    vector<string> matches;
+    
+    glob_t glob_result;
+    memset(&glob_result, 0, sizeof(glob_result));
+    
+    int ret = glob(pattern.c_str(), GLOB_TILDE, NULL, &glob_result);
+    
+    if (ret == 0) {
+        for (size_t i = 0; i < glob_result.gl_pathc; i++) {
+            matches.push_back(string(glob_result.gl_pathv[i]));
+        }
+        globfree(&glob_result);
+    } else {
+        // No matches, return original pattern
+        matches.push_back(pattern);
+    }
+    
+    return matches;
 }
 
 // Search for an executable in PATH directories
@@ -252,6 +349,42 @@ bool execute_builtin_in_pipeline(const vector<string>& args, int& last_appended_
             if (chdir(path.c_str()) != 0) {
                 cerr << "cd: " << path << ": No such file or directory" << endl;
             }
+        }
+    }
+    else if (command == "export") {
+        // Export variables to environment
+        for (int i = 1; i < args.size(); i++) {
+            string arg = args[i];
+            size_t eq_pos = arg.find('=');
+            
+            if (eq_pos != string::npos) {
+                // VAR=value format
+                string var_name = arg.substr(0, eq_pos);
+                string var_value = arg.substr(eq_pos + 1);
+                
+                // Set in both shell variables and environment
+                shell_variables[var_name] = var_value;
+                setenv(var_name.c_str(), var_value.c_str(), 1);
+            } else {
+                // Just VAR (export existing shell variable)
+                if (shell_variables.count(arg)) {
+                    setenv(arg.c_str(), shell_variables[arg].c_str(), 1);
+                }
+            }
+        }
+    }
+    else if (command == "unset") {
+        // Unset variables
+        for (int i = 1; i < args.size(); i++) {
+            shell_variables.erase(args[i]);
+            unsetenv(args[i].c_str());
+        }
+    }
+    else if (command == "env") {
+        // Print all environment variables
+        extern char** environ;
+        for (char** env = environ; *env != nullptr; env++) {
+            cout << *env << endl;
         }
     }
     else if (command == "history") {
@@ -577,6 +710,7 @@ void execute_program(const vector<string>& args, const string& stdout_file = "",
     string full_path;
     if (!find_executable_in_path(command, full_path)) {
         cout << command << ": command not found" << endl;
+        last_exit_status = 127;  // Command not found
         return;
     }
     
@@ -652,6 +786,13 @@ void execute_program(const vector<string>& args, const string& stdout_file = "",
         // Wait for the child process to finish
         int status;
         waitpid(process_id, &status, 0);
+        
+        // Update exit status
+        if (WIFEXITED(status)) {
+            last_exit_status = WEXITSTATUS(status);
+        } else {
+            last_exit_status = 1;  // Abnormal termination
+        }
     }
 }
 
@@ -750,6 +891,72 @@ char** command_completion(const char* text, int start, int end) {
     return nullptr;
 }
 
+// Check if a line is a variable assignment (VAR=value)
+bool is_variable_assignment(const string& line, string& var_name, string& var_value) {
+    size_t eq_pos = line.find('=');
+    if (eq_pos == string::npos || eq_pos == 0) {
+        return false;
+    }
+    
+    // Check if left side is valid variable name (alphanumeric + underscore)
+    for (size_t i = 0; i < eq_pos; i++) {
+        if (!isalnum(line[i]) && line[i] != '_') {
+            return false;
+        }
+    }
+    
+    var_name = line.substr(0, eq_pos);
+    var_value = line.substr(eq_pos + 1);
+    return true;
+}
+
+// Split command line by logical operators (&&, ||, ;)
+// Returns pairs of (command_string, operator_before_it)
+vector<pair<string, string>> split_by_logical_operators(const string& line) {
+    vector<pair<string, string>> commands;
+    string current_cmd = "";
+    string last_operator = "";  // Operator before the current command
+    
+    int i = 0;
+    while (i < line.length()) {
+        if (i + 1 < line.length() && line.substr(i, 2) == "&&") {
+            // Found &&
+            if (!current_cmd.empty()) {
+                commands.push_back({current_cmd, last_operator});
+                current_cmd = "";
+            }
+            last_operator = "&&";
+            i += 2;
+        } else if (i + 1 < line.length() && line.substr(i, 2) == "||") {
+            // Found ||
+            if (!current_cmd.empty()) {
+                commands.push_back({current_cmd, last_operator});
+                current_cmd = "";
+            }
+            last_operator = "||";
+            i += 2;
+        } else if (line[i] == ';') {
+            // Found ;
+            if (!current_cmd.empty()) {
+                commands.push_back({current_cmd, last_operator});
+                current_cmd = "";
+            }
+            last_operator = ";";
+            i++;
+        } else {
+            current_cmd += line[i];
+            i++;
+        }
+    }
+    
+    // Add the last command
+    if (!current_cmd.empty()) {
+        commands.push_back({current_cmd, last_operator});
+    }
+    
+    return commands;
+}
+
 int main() {
     // Enable automatic flushing of output
     cout << unitbuf;
@@ -790,11 +997,58 @@ int main() {
         // Free the memory allocated by readline
         free(line_ptr);
         
-        // Parse the line with quote support
-        vector<string> tokens = parse_command_line(line);
+        // Skip empty lines and comments
+        if (line.empty() || line[0] == '#') continue;
         
-        // Skip empty lines
-        if (tokens.empty()) continue;
+        // Check if this is a variable assignment
+        string var_name, var_value;
+        if (is_variable_assignment(line, var_name, var_value)) {
+            // Expand variables in the value
+            var_value = expand_variables(var_value);
+            shell_variables[var_name] = var_value;
+            last_exit_status = 0;
+            continue;
+        }
+        
+        // Split by logical operators (&&, ||, ;)
+        vector<pair<string, string>> command_chain = split_by_logical_operators(line);
+        
+        // Execute each command in the chain
+        for (const auto& cmd_pair : command_chain) {
+            string cmd_line = cmd_pair.first;
+            string operator_before = cmd_pair.second;
+            
+            // Check if we should skip this command based on previous exit status
+            if (operator_before == "&&" && last_exit_status != 0) {
+                continue;  // Skip because previous command failed
+            }
+            if (operator_before == "||" && last_exit_status == 0) {
+                continue;  // Skip because previous command succeeded
+            }
+            
+            // Parse the command line with quote support
+            vector<string> tokens = parse_command_line(cmd_line);
+            
+            // Skip empty commands
+            if (tokens.empty()) continue;
+            
+            // Expand variables in all tokens (except in single quotes - handled in parse)
+            vector<string> expanded_tokens;
+            for (const auto& token : tokens) {
+                // Expand variables
+                string expanded = expand_variables(token);
+                
+                // Check if token contains wildcards (* or ?)
+                if (expanded.find('*') != string::npos || expanded.find('?') != string::npos) {
+                    // Expand wildcards
+                    vector<string> matches = expand_wildcards(expanded);
+                    expanded_tokens.insert(expanded_tokens.end(), matches.begin(), matches.end());
+                } else {
+                    expanded_tokens.push_back(expanded);
+                }
+            }
+            
+            tokens = expanded_tokens;
         
         // Check for pipeline (|) - support multiple pipes
         vector<int> pipe_indices;
@@ -898,11 +1152,51 @@ int main() {
             // Exit the shell
             break;
         }
+        else if (command == "export") {
+            // Export variables to environment
+            for (int i = 1; i < command_tokens.size(); i++) {
+                string arg = command_tokens[i];
+                size_t eq_pos = arg.find('=');
+                
+                if (eq_pos != string::npos) {
+                    // VAR=value format
+                    string var_name = arg.substr(0, eq_pos);
+                    string var_value = arg.substr(eq_pos + 1);
+                    
+                    // Set in both shell variables and environment
+                    shell_variables[var_name] = var_value;
+                    setenv(var_name.c_str(), var_value.c_str(), 1);
+                } else {
+                    // Just VAR (export existing shell variable)
+                    if (shell_variables.count(arg)) {
+                        setenv(arg.c_str(), shell_variables[arg].c_str(), 1);
+                    }
+                }
+            }
+            last_exit_status = 0;
+        }
+        else if (command == "unset") {
+            // Unset variables
+            for (int i = 1; i < command_tokens.size(); i++) {
+                shell_variables.erase(command_tokens[i]);
+                unsetenv(command_tokens[i].c_str());
+            }
+            last_exit_status = 0;
+        }
+        else if (command == "env") {
+            // Print all environment variables
+            extern char** environ;
+            for (char** env = environ; *env != nullptr; env++) {
+                cout << *env << endl;
+            }
+            last_exit_status = 0;
+        }
         else if (command == "type") {
             // Check each argument after 'type'
             for (int i = 1; i < command_tokens.size(); i++) {
                 check_command_validity(command_tokens[i]);
             }
+            last_exit_status = 0;
         }
         else if (command == "echo") {
             // Handle stderr redirection - create empty file if specified
@@ -945,20 +1239,24 @@ int main() {
                 }
                 cout << endl;
             }
+            last_exit_status = 0;
         }
         else if (command == "pwd") {
             // Print current working directory
             vector<char>cwd(1024);
             if (getcwd(cwd.data(), cwd.size()) != nullptr) {
                 cout << cwd.data() << endl;
+                last_exit_status = 0;
             } else {
                 cerr << "Error: Unable to get current directory" << endl;
+                last_exit_status = 1;
             }
         }
         else if (command == "cd") {
             // Change directory
             if (command_tokens.size() < 2) {
                 cerr << "cd: missing argument" << endl;
+                last_exit_status = 1;
             } else {
                 string path = command_tokens[1];
                 
@@ -982,6 +1280,9 @@ int main() {
                 if (chdir(path.c_str()) != 0) {
                     // Failed to change directory
                     cout << "cd: " << command_tokens[1] << ": No such file or directory" << endl;
+                    last_exit_status = 1;
+                } else {
+                    last_exit_status = 0;
                 }
                 // If successful, directory is changed (no output needed)
             }
@@ -1057,12 +1358,15 @@ int main() {
                     cout << "    " << (i + 1) << "  " << entry->line << endl;
                 }
             }
+            last_exit_status = 0;
         }
         else {
             // Not a builtin, try to execute as external program
             execute_program(command_tokens, stdout_file, stdout_append, stderr_file, stderr_append);
         }
-    }
+        
+        }  // End of command chain for loop
+    }  // End of main while loop
     
     // Save history to HISTFILE if the environment variable is set
     if (histfile != nullptr) {
